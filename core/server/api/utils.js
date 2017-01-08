@@ -43,6 +43,7 @@ utils = {
          */
         return function doValidate() {
             var object, options, permittedOptions;
+
             if (arguments.length === 2) {
                 object = arguments[0];
                 options = _.clone(arguments[1]) || {};
@@ -90,7 +91,7 @@ utils = {
                 }
 
                 // For now, we can only handle showing the first validation error
-                return errors.logAndRejectError(validationErrors[0]);
+                return Promise.reject(validationErrors[0]);
             }
 
             // If we got an object, check that too
@@ -109,11 +110,13 @@ utils = {
 
     validateOptions: function validateOptions(options) {
         var globalValidations = {
-                id: {matches: /^\d+|me$/},
+                id: {matches: /^[a-f\d]{24}$|^1$|me/i},
                 uuid: {isUUID: true},
                 slug: {isSlug: true},
                 page: {matches: /^\d+$/},
                 limit: {matches: /^\d+|all$/},
+                from: {isDate: true},
+                to: {isDate: true},
                 fields: {matches: /^[\w, ]+$/},
                 order: {matches: /^[a-z0-9_,\. ]+$/i},
                 name: {}
@@ -184,8 +187,6 @@ utils = {
 
             return permsPromise.then(function permissionGranted() {
                 return options;
-            }).catch(function handleError(error) {
-                return errors.formatAndRejectAPIError(error);
             });
         };
     },
@@ -210,13 +211,15 @@ utils = {
 
             return permsPromise.then(function permissionGranted() {
                 return options;
-            }).catch(errors.NoPermissionError, function handleNoPermissionError(error) {
-                // pimp error message
-                error.message = i18n.t('errors.api.utils.noPermissionToCall', {method: method, docName: docName});
-                // forward error to next catch()
-                return Promise.reject(error);
-            }).catch(function handleError(error) {
-                return errors.formatAndRejectAPIError(error);
+            }).catch(function handleNoPermissionError(err) {
+                if (err instanceof errors.NoPermissionError) {
+                    err.message = i18n.t('errors.api.utils.noPermissionToCall', {method: method, docName: docName});
+                    return Promise.reject(err);
+                }
+
+                return Promise.reject(new errors.GhostError({
+                    err: err
+                }));
             });
         };
     },
@@ -272,7 +275,9 @@ utils = {
      */
     checkObject: function (object, docName, editId) {
         if (_.isEmpty(object) || _.isEmpty(object[docName]) || _.isEmpty(object[docName][0])) {
-            return errors.logAndRejectError(new errors.BadRequestError(i18n.t('errors.api.utils.noRootKeyProvided', {docName: docName})));
+            return Promise.reject(new errors.BadRequestError({
+                message: i18n.t('errors.api.utils.noRootKeyProvided', {docName: docName})
+            }));
         }
 
         // convert author property to author_id to match the name in the database
@@ -289,11 +294,13 @@ utils = {
                 return;
             }
 
-            object[docName][index] = _.omit(object[docName][index], _.isNull);
+            object[docName][index] = _.omitBy(object[docName][index], _.isNull);
         });
 
-        if (editId && object[docName][0].id && parseInt(editId, 10) !== parseInt(object[docName][0].id, 10)) {
-            return errors.logAndRejectError(new errors.BadRequestError(i18n.t('errors.api.utils.invalidIdProvided')));
+        if (editId && object[docName][0].id && editId !== object[docName][0].id) {
+            return Promise.reject(new errors.BadRequestError({
+                message: i18n.t('errors.api.utils.invalidIdProvided')
+            }));
         }
 
         return Promise.resolve(object);
@@ -305,7 +312,7 @@ utils = {
         var type = fileData.mimetype,
             ext = path.extname(fileData.name).toLowerCase();
 
-        if (_.contains(types, type) && _.contains(extensions, ext)) {
+        if (_.includes(types, type) && _.includes(extensions, ext)) {
             return true;
         }
         return false;

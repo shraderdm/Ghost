@@ -1,9 +1,6 @@
-/*globals describe, before, beforeEach, afterEach, it */
 var testUtils   = require('../../utils'),
     should      = require('should'),
     _           = require('lodash'),
-
-    // Stuff we are testing
     RoleAPI     = require('../../../server/api/roles'),
     context     = testUtils.context;
 

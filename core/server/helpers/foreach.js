@@ -4,22 +4,37 @@
 // Block helper designed for looping through posts
 var hbs             = require('express-hbs'),
     _               = require('lodash'),
-    errors          = require('../errors'),
+    logging         = require('../logging'),
     i18n            = require('../i18n'),
+    visibilityFilter = require('../utils/visibility-filter'),
+    utils           = require('./utils'),
 
     hbsUtils        = hbs.handlebars.Utils,
     foreach;
 
-foreach = function (itemType, options) {
+function filterItemsByVisibility(items, options) {
+    var visibility = utils.parseVisibility(options);
+
+    return visibilityFilter(items, visibility, !!options.hash.visibility);
+}
+
+foreach = function (items, options) {
     if (!options) {
-        errors.logWarn(i18n.t('warnings.helpers.foreach.iteratorNeeded'));
+        logging.warn(i18n.t('warnings.helpers.foreach.iteratorNeeded'));
     }
+
+    if (hbsUtils.isFunction(items)) {
+        items = items.call(this);
+    }
+
+    // Exclude items which should not be visible in the theme
+    items = filterItemsByVisibility(items, options);
 
     // Initial values set based on parameters sent through. If nothing sent, set to defaults
     var fn = options.fn,
         inverse = options.inverse,
         columns = options.hash.columns,
-        length = _.size(itemType),
+        length = _.size(items),
         limit = parseInt(options.hash.limit, 10) || length,
         from = parseInt(options.hash.from, 10) || 1,
         to = parseInt(options.hash.to, 10) || length,
@@ -35,10 +50,6 @@ foreach = function (itemType, options) {
 
     if (options.data && options.ids) {
         contextPath = hbsUtils.appendContextPath(options.data.contextPath, options.ids[0]) + '.';
-    }
-
-    if (hbsUtils.isFunction(itemType)) {
-        itemType = itemType.call(this);
     }
 
     if (options.data) {
@@ -61,9 +72,9 @@ foreach = function (itemType, options) {
             }
         }
 
-        output = output + fn(itemType[field], {
+        output = output + fn(items[field], {
             data: data,
-            blockParams: hbsUtils.blockParams([itemType[field], field], [contextPath + field, null])
+            blockParams: hbsUtils.blockParams([items[field], field], [contextPath + field, null])
         });
     }
 
@@ -88,8 +99,8 @@ foreach = function (itemType, options) {
         });
     }
 
-    if (itemType && typeof itemType === 'object') {
-        iterateCollection(itemType);
+    if (items && typeof items === 'object') {
+        iterateCollection(items);
     }
 
     if (length === 0) {

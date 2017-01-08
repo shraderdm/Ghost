@@ -1,15 +1,16 @@
 var https           = require('https'),
-    errors          = require('../../errors'),
     url             = require('url'),
     Promise         = require('bluebird'),
-    config          = require('../../config'),
+    errors          = require('../../errors'),
+    logging         = require('../../logging'),
+    utils           = require('../../utils'),
     events          = require('../../events'),
+    logging          = require('../../logging'),
     api             = require('../../api/settings'),
     i18n            = require('../../i18n'),
     schema          = require('../schema').checks,
     options,
     req,
-    slack = {},
     slackData = {};
 
 function getSlackSettings() {
@@ -17,7 +18,7 @@ function getSlackSettings() {
         var slackSetting = response.settings[0].value;
 
         try {
-            slackSetting = JSON.parse(slackSetting) || slackSetting;
+            slackSetting = JSON.parse(slackSetting);
         } catch (e) {
             return Promise.reject(e);
         }
@@ -32,12 +33,12 @@ function makeRequest(reqOptions, reqPayload) {
     reqPayload = JSON.stringify(reqPayload);
 
     req.write(reqPayload);
-    req.on('error', function (error) {
-        errors.logError(
-            error,
-            i18n.t('errors.data.xml.xmlrpc.pingUpdateFailed.error'),
-            i18n.t('errors.data.xml.xmlrpc.pingUpdateFailed.help', {url: 'http://support.ghost.org'})
-        );
+    req.on('error', function (err) {
+        logging.error(new errors.GhostError({
+            err: err,
+            context: i18n.t('errors.data.xml.xmlrpc.pingUpdateFailed.error'),
+            help: i18n.t('errors.data.xml.xmlrpc.pingUpdateFailed.help', {url: 'http://support.ghost.org'})
+        }));
     });
 
     req.end();
@@ -48,7 +49,7 @@ function ping(post) {
 
     // If this is a post, we want to send the link of the post
     if (schema.isPost(post)) {
-        message = config.urlFor('post', {post: post}, true);
+        message = utils.url.urlFor('post', {post: post}, true);
     } else {
         message = post.message;
     }
@@ -73,7 +74,7 @@ function ping(post) {
             slackData = {
                 text: message,
                 unfurl_links: true,
-                icon_url: config.urlFor({relativeUrl: '/ghost/img/ghosticon.jpg'}, {}, true),
+                icon_url: utils.url.urlFor({relativeUrl: '/ghost/img/ghosticon.jpg'}, {}, true),
                 username: 'Ghost'
             };
 
@@ -83,24 +84,29 @@ function ping(post) {
             options.headers = {'Content-type': 'application/json'};
 
             // with all the data we have, we're doing the request now
-            slack._makeRequest(options, slackData);
+            makeRequest(options, slackData);
         } else {
             return;
         }
     });
 }
 
-function init() {
-    events.on('post.published', function (model) {
-        slack._ping(model.toJSON());
-    });
-    events.on('slack.test', function () {
-        slack._ping({
-            message: 'Heya! This is a test notification from your Ghost blog :simple_smile:. Seems to work fine!'
-        });
+function listener(model) {
+    ping(model.toJSON());
+}
+
+function testPing() {
+    ping({
+        message: 'Heya! This is a test notification from your Ghost blog :simple_smile:. Seems to work fine!'
     });
 }
-slack.init = init;
-slack._ping = ping;
-slack._makeRequest = makeRequest;
-module.exports = slack;
+
+function listen() {
+    events.on('post.published', listener);
+    events.on('slack.test', testPing);
+}
+
+// Public API
+module.exports = {
+    listen: listen
+};

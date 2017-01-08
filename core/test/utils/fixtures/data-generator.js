@@ -1,24 +1,30 @@
 var _             = require('lodash'),
-    uuid          = require('node-uuid'),
+    uuid          = require('uuid'),
+    ObjectId      = require('bson-objectid'),
+    moment        = require('moment'),
     globalUtils   = require('../../../server/utils'),
     DataGenerator = {};
+
 /*jshint quotmark:false*/
 // jscs:disable validateQuoteMarks, requireCamelCaseOrUpperCaseIdentifiers
 DataGenerator.Content = {
     posts: [
         {
+            id: ObjectId.generate(),
             title: "HTML Ipsum",
             slug: "html-ipsum",
             markdown: "<h1>HTML Ipsum Presents</h1><p><strong>Pellentesque habitant morbi tristique</strong> senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. <em>Aenean ultricies mi vitae est.</em> Mauris placerat eleifend leo. Quisque sit amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum sed, <code>commodo vitae</code>, ornare sit amet, wisi. Aenean fermentum, elit eget tincidunt condimentum, eros ipsum rutrum orci, sagittis tempus lacus enim ac dui. <a href=\"#\">Donec non enim</a> in turpis pulvinar facilisis. Ut felis.</p><h2>Header Level 2</h2><ol><li>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</li><li>Aliquam tincidunt mauris eu risus.</li></ol><blockquote><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus magna. Cras in mi at felis aliquet congue. Ut a est eget ligula molestie gravida. Curabitur massa. Donec eleifend, libero at sagittis mollis, tellus est malesuada tellus, at luctus turpis elit sit amet quam. Vivamus pretium ornare est.</p></blockquote><h3>Header Level 3</h3><ul><li>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</li><li>Aliquam tincidunt mauris eu risus.</li></ul><pre><code>#header h1 a{display: block;width: 300px;height: 80px;}</code></pre>",
             published_at: new Date("2015-01-01")
         },
         {
+            id: ObjectId.generate(),
             title: "Ghostly Kitchen Sink",
             slug: "ghostly-kitchen-sink",
             markdown: "<h1>HTML Ipsum Presents</h1><p><strong>Pellentesque habitant morbi tristique</strong> senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. <em>Aenean ultricies mi vitae est.</em> Mauris placerat eleifend leo. Quisque sit amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum sed, <code>commodo vitae</code>, ornare sit amet, wisi. Aenean fermentum, elit eget tincidunt condimentum, eros ipsum rutrum orci, sagittis tempus lacus enim ac dui. <a href=\"#\">Donec non enim</a> in turpis pulvinar facilisis. Ut felis.</p><h2>Header Level 2</h2><ol><li>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</li><li>Aliquam tincidunt mauris eu risus.</li></ol><blockquote><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus magna. Cras in mi at felis aliquet congue. Ut a est eget ligula molestie gravida. Curabitur massa. Donec eleifend, libero at sagittis mollis, tellus est malesuada tellus, at luctus turpis elit sit amet quam. Vivamus pretium ornare est.</p></blockquote><h3>Header Level 3</h3><ul><li>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</li><li>Aliquam tincidunt mauris eu risus.</li></ul><pre><code>#header h1 a{display: block;width: 300px;height: 80px;}</code></pre>",
             published_at: new Date("2015-01-02")
         },
         {
+            id: ObjectId.generate(),
             title: "Short and Sweet",
             slug: "short-and-sweet",
             markdown: "## testing\n\nmctesters\n\n- test\n- line\n- items",
@@ -29,6 +35,7 @@ DataGenerator.Content = {
             uuid: "2ac6b4f6-e1f3-406c-9247-c94a0496d39d"
         },
         {
+            id: ObjectId.generate(),
             title: "Not finished yet",
             slug: "unfinished",
             markdown: "<h1>HTML Ipsum Presents</h1><p><strong>Pellentesque habitant morbi tristique</strong> senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. <em>Aenean ultricies mi vitae est.</em> Mauris placerat eleifend leo. Quisque sit amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum sed, <code>commodo vitae</code>, ornare sit amet, wisi. Aenean fermentum, elit eget tincidunt condimentum, eros ipsum rutrum orci, sagittis tempus lacus enim ac dui. <a href=\"#\">Donec non enim</a> in turpis pulvinar facilisis. Ut felis.</p><h2>Header Level 2</h2><ol><li>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</li><li>Aliquam tincidunt mauris eu risus.</li></ol><blockquote><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus magna. Cras in mi at felis aliquet congue. Ut a est eget ligula molestie gravida. Curabitur massa. Donec eleifend, libero at sagittis mollis, tellus est malesuada tellus, at luctus turpis elit sit amet quam. Vivamus pretium ornare est.</p></blockquote><h3>Header Level 3</h3><ul><li>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</li><li>Aliquam tincidunt mauris eu risus.</li></ul><pre><code>#header h1 a{display: block;width: 300px;height: 80px;}</code></pre>",
@@ -37,17 +44,20 @@ DataGenerator.Content = {
             featured: false
         },
         {
+            id: ObjectId.generate(),
             title: "Not so short, bit complex",
             slug: "not-so-short-bit-complex",
             markdown: "<p><nav><ul><li><a href=\"#nowhere\" title=\"Anchor URL\">Lorem</a></li><li><a href=\"/about#nowhere\" title=\"Relative URL\">Aliquam</a></li><li><a href=\"//somewhere.com/link#nowhere\" title=\"Protocol Relative URL\">Tortor</a></li><li><a href=\"http://somewhere.com/link#nowhere\" title=\"Absolute URL\">Morbi</a></li><li><a href=\"#nowhere\" title=\"Praesent dapibus, neque id cursus faucibus\">Praesent</a></li><li><a href=\"#nowhere\" title=\"Pellentesque fermentum dolor\">Pellentesque</a></li></ul></nav><p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p><table><thead><tr><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead><tbody><tr><td>a</td><td>b</td><td>c</td><td>d</td></tr><tr><td>e</td><td>f</td><td>g</td><td>h</td></tr><tr><td>i</td><td>j</td><td>k</td><td>l</td></tr></tbody></table><dl><dt>Definition list</dt><dd>Consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</dd><dt>Lorem ipsum dolor sit amet</dt><dd>Consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</dd></dl><ul><li>Morbi in sem quis dui placerat ornare. Pellentesque odio nisi, euismod in, pharetra a, ultricies in, diam. Sed arcu. Cras consequat.</li><li>Praesent dapibus, neque id cursus faucibus, tortor neque egestas augue, eu vulputate magna eros eu erat. Aliquam erat volutpat. Nam dui mi, tincidunt quis, accumsan porttitor, facilisis luctus, metus.</li><li>Phasellus ultrices nulla quis nibh. Quisque a lectus. Donec consectetuer ligula vulputate sem tristique cursus. Nam nulla quam, gravida non, commodo a, sodales sit amet, nisi.</li><li>Pellentesque fermentum dolor. Aliquam quam lectus, facilisis auctor, ultrices ut, elementum vulputate, nunc.</li></ul></p>"
         },
         {
+            id: ObjectId.generate(),
             title: "This is a static page",
             slug: "static-page-test",
             markdown: "<h1>Static page test is what this is for.</h1><p>Hopefully you don't find it a bore.</p>",
             page: 1
         },
         {
+            id: ObjectId.generate(),
             title: "This is a draft static page",
             slug: "static-page-draft",
             markdown: "<h1>Static page test is what this is for.</h1><p>Hopefully you don't find it a bore.</p>",
@@ -55,31 +65,38 @@ DataGenerator.Content = {
             status: "draft"
         },
         {
+            id: ObjectId.generate(),
             title: "This is a scheduled post!!",
             slug: "scheduled-post",
             markdown: "<h1>Welcome to my invisible post!</h1>",
-            status: "scheduled"
+            status: "scheduled",
+            published_at: moment().add(2, 'days').toDate()
         }
     ],
 
     tags: [
         {
+            id: ObjectId.generate(),
             name: "kitchen sink",
             slug: "kitchen-sink"
         },
         {
+            id: ObjectId.generate(),
             name: "bacon",
             slug: "bacon"
         },
         {
+            id: ObjectId.generate(),
             name: "chorizo",
             slug: "chorizo"
         },
         {
+            id: ObjectId.generate(),
             name: "pollo",
             slug: "pollo"
         },
         {
+            id: ObjectId.generate(),
             name: "injection",
             slug: "injection"
         }
@@ -88,84 +105,120 @@ DataGenerator.Content = {
     // Password = Sl1m3rson
     users: [
         {
+            // owner (owner is still id 1 because of permissions)
+            id: '1',
             name: 'Joe Bloggs',
             slug: 'joe-bloggs',
             email: 'jbloggs@example.com',
             password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
         },
         {
+            // admin
+            id: ObjectId.generate(),
             name: 'Smith Wellingsworth',
             slug: 'smith-wellingsworth',
             email: 'swellingsworth@example.com',
             password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
         },
         {
+            // editor
+            id: ObjectId.generate(),
             name: 'Jimothy Bogendath',
             slug: 'jimothy-bogendath',
             email: 'jbOgendAth@example.com',
             password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
         },
         {
+            // author
+            id: ObjectId.generate(),
             name: 'Slimer McEctoplasm',
             slug: 'slimer-mcectoplasm',
             email: 'smcectoplasm@example.com',
             password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
         },
         {
+            // editor 2
+            id: ObjectId.generate(),
             name: 'Ivan Email',
             slug: 'ivan-email',
-            email: 'info@ghost.org',
+            email: 'info1@ghost.org',
+            password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
+        },
+        {
+            // author 2
+            id: ObjectId.generate(),
+            name: 'Author2',
+            slug: 'a-2',
+            email: 'info2@ghost.org',
+            password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
+        },
+        {
+            // admin 2
+            id: ObjectId.generate(),
+            name: 'admin2',
+            slug: 'ad-2',
+            email: 'info3@ghost.org',
             password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6'
         }
     ],
 
     permissions: [
         {
+            id: ObjectId.generate(),
             name: 'Browse posts',
             action_type: 'browse',
             object_type: 'post'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'edit',
             object_type: 'post'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'edit',
             object_type: 'tag'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'edit',
             object_type: 'user'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'edit',
             object_type: 'page'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'add',
             object_type: 'post'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'add',
             object_type: 'user'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'add',
             object_type: 'page'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'destroy',
             object_type: 'post'
         },
         {
+            id: ObjectId.generate(),
             name: 'test',
             action_type: 'destroy',
             object_type: 'user'
@@ -174,18 +227,22 @@ DataGenerator.Content = {
 
     roles: [
         {
+            id: ObjectId.generate(),
             name:             'Administrator',
             description:      'Administrators'
         },
         {
+            id: ObjectId.generate(),
             name:             'Editor',
             description:      'Editors'
         },
         {
+            id: ObjectId.generate(),
             name:             'Author',
             description:      'Authors'
         },
         {
+            id: ObjectId.generate(),
             name:             'Owner',
             description:      'Blog Owner'
         }
@@ -193,18 +250,21 @@ DataGenerator.Content = {
 
     apps: [
         {
+            id: ObjectId.generate(),
             name: 'Kudos',
             slug: 'kudos',
             version: '0.0.1',
             status: 'installed'
         },
         {
+            id: ObjectId.generate(),
             name: 'Importer',
             slug: 'importer',
             version: '0.1.0',
             status: 'inactive'
         },
         {
+            id: ObjectId.generate(),
             name: 'Hemingway',
             slug: 'hemingway',
             version: '1.0.0',
@@ -214,12 +274,14 @@ DataGenerator.Content = {
 
     app_fields: [
         {
+            id: ObjectId.generate(),
             key: 'count',
             value: '120',
             type: 'number',
             active: true
         },
         {
+            id: ObjectId.generate(),
             key: 'words',
             value: '512',
             type: 'number',
@@ -229,10 +291,12 @@ DataGenerator.Content = {
 
     app_settings: [
         {
+            id: ObjectId.generate(),
             key: 'color',
             value: 'ghosty'
         },
         {
+            id: ObjectId.generate(),
             key: 'setting',
             value: 'value'
         }
@@ -240,9 +304,11 @@ DataGenerator.Content = {
 
     subscribers: [
         {
+            id: ObjectId.generate(),
             email: 'subscriber1@test.com'
         },
         {
+            id: ObjectId.generate(),
             email: 'subscriber2@test.com'
         }
     ]
@@ -257,16 +323,17 @@ DataGenerator.forKnex = (function () {
         roles,
         users,
         roles_users,
-        clients;
+        clients,
+        invites;
 
     function createBasic(overrides) {
         var newObj = _.cloneDeep(overrides);
 
         return _.defaults(newObj, {
-            uuid: uuid.v4(),
-            created_by: 1,
+            id: ObjectId.generate(),
+            created_by: DataGenerator.Content.users[0].id,
             created_at: new Date(),
-            updated_by: 1,
+            updated_by: DataGenerator.Content.users[0].id,
             updated_at: new Date()
         });
     }
@@ -275,29 +342,31 @@ DataGenerator.forKnex = (function () {
         var newObj = _.cloneDeep(overrides);
 
         return _.defaults(newObj, {
+            id: ObjectId.generate(),
             uuid: uuid.v4(),
+            title: 'title',
             status: 'published',
             html: overrides.markdown,
             language: 'en_US',
             featured: true,
             page: false,
-            author_id: 1,
+            author_id: DataGenerator.Content.users[0].id,
             updated_at: new Date(),
-            updated_by: 1,
+            updated_by: DataGenerator.Content.users[0].id,
             created_at: new Date(),
-            created_by: 1,
+            created_by: DataGenerator.Content.users[0].id,
             published_at: new Date(),
-            published_by: 1
+            published_by: DataGenerator.Content.users[0].id
         });
     }
 
     function createGenericPost(uniqueInteger, status, language, author_id) {
         status = status || 'draft';
         language = language || 'en_US';
-        author_id = author_id || 1;
+        author_id = author_id || DataGenerator.Content.users[0].id;
 
         return createPost({
-            uuid: uuid.v4(),
+            id: ObjectId.generate(),
             title: 'Test Post ' + uniqueInteger,
             slug: 'ghost-from-fiction-to-function-' + uniqueInteger,
             author_id: author_id,
@@ -313,11 +382,32 @@ DataGenerator.forKnex = (function () {
         var newObj = _.cloneDeep(overrides);
 
         return _.defaults(newObj, {
-            uuid: uuid.v4(),
+            id: ObjectId.generate(),
+            name: 'name',
+            slug: 'slug_' + Date.now(),
             status: 'active',
-            created_by: 1,
+            password: '$2a$10$.pZeeBE0gHXd0PTnbT/ph.GEKgd0Wd3q2pWna3ynTGBkPKnGIKZL6',
+            created_by: DataGenerator.Content.users[0].id,
             created_at: new Date()
         });
+    }
+
+    function createClient(overrides) {
+        overrides = overrides || {};
+
+        var newObj = _.cloneDeep(overrides),
+            basics = createBasic(newObj);
+
+        return _.defaults(newObj, {
+            id: ObjectId.generate(),
+            uuid: uuid.v4(),
+            secret: 'not_available',
+            redirection_uri: 'http://localhost:9999',
+            client_uri: 'http://localhost:9000',
+            name: 'client',
+            type: 'ua',
+            status: 'enabled'
+        }, basics);
     }
 
     function createGenericUser(uniqueInteger) {
@@ -331,6 +421,7 @@ DataGenerator.forKnex = (function () {
 
     function createPostsTags(postId, tagId) {
         return {
+            id: ObjectId.generate(),
             post_id: postId,
             tag_id: tagId
         };
@@ -340,12 +431,12 @@ DataGenerator.forKnex = (function () {
         var newObj = _.cloneDeep(overrides);
 
         return _.defaults(newObj, {
-            uuid: uuid.v4(),
-            created_by: 1,
+            id: ObjectId.generate(),
+            created_by: DataGenerator.Content.users[0].id,
             created_at: new Date(),
             active: true,
-            app_id: 1,
-            relatable_id: 1,
+            app_id: DataGenerator.Content.apps[0].id,
+            relatable_id: DataGenerator.Content.posts[0].id,
             relatable_type: 'posts'
         });
     }
@@ -354,9 +445,9 @@ DataGenerator.forKnex = (function () {
         var newObj = _.cloneDeep(overrides);
 
         return _.defaults(newObj, {
-            uuid: uuid.v4(),
-            app_id: 1,
-            created_by: 1,
+            id: ObjectId.generate(),
+            app_id: DataGenerator.Content.apps[0].id,
+            created_by: DataGenerator.Content.users[0].id,
             created_at: new Date()
         });
     }
@@ -365,9 +456,25 @@ DataGenerator.forKnex = (function () {
         var newObj = _.cloneDeep(overrides);
 
         return _.defaults(newObj, {
+            id: ObjectId.generate(),
             token: uuid.v4(),
-            client_id: 1,
+            client_id: clients[0].id,
             expires: Date.now() + globalUtils.ONE_DAY_MS
+        });
+    }
+
+    function createInvite(overrides) {
+        var newObj = _.cloneDeep(overrides);
+
+        return _.defaults(newObj, {
+            id: ObjectId.generate(),
+            token: uuid.v4(),
+            email: 'test@ghost.org',
+            role_id: DataGenerator.Content.roles[0].id,
+            expires: Date.now() + (60 * 1000),
+            created_by: DataGenerator.Content.users[0].id,
+            created_at: new Date(),
+            status: 'sent'
         });
     }
 
@@ -405,23 +512,27 @@ DataGenerator.forKnex = (function () {
     ];
 
     clients = [
-        createBasic({name: 'Ghost Admin', slug: 'ghost-admin', secret: 'not_available', type: 'ua', status: 'enabled'})
+        createClient({name: 'Ghost Admin', slug: 'ghost-admin', type: 'ua'}),
+        createClient({name: 'Ghost Scheduler', slug: 'ghost-scheduler', type: 'web'}),
+        createClient({name: 'Ghost Auth', slug: 'ghost-auth', type: 'web'})
     ];
 
     roles_users = [
-        {user_id: 1, role_id: 4},
-        {user_id: 2, role_id: 1},
-        {user_id: 3, role_id: 2},
-        {user_id: 4, role_id: 3}
+        {id: ObjectId.generate(), user_id: DataGenerator.Content.users[0].id, role_id: DataGenerator.Content.roles[3].id},
+        {id: ObjectId.generate(), user_id: DataGenerator.Content.users[1].id, role_id: DataGenerator.Content.roles[0].id},
+        {id: ObjectId.generate(), user_id: DataGenerator.Content.users[2].id, role_id: DataGenerator.Content.roles[1].id},
+        {id: ObjectId.generate(), user_id: DataGenerator.Content.users[3].id, role_id: DataGenerator.Content.roles[2].id}
     ];
 
+    // this is not pretty, but the fastest
+    // it relies on the created posts/tags
     posts_tags = [
-        {post_id: 1, tag_id: 1},
-        {post_id: 1, tag_id: 2},
-        {post_id: 2, tag_id: 1},
-        {post_id: 2, tag_id: 2},
-        {post_id: 3, tag_id: 3},
-        {post_id: 4, tag_id: 4}
+        {id: ObjectId.generate(), post_id: DataGenerator.Content.posts[0].id, tag_id: DataGenerator.Content.tags[0].id},
+        {id: ObjectId.generate(), post_id: DataGenerator.Content.posts[0].id, tag_id: DataGenerator.Content.tags[1].id},
+        {id: ObjectId.generate(), post_id: DataGenerator.Content.posts[1].id, tag_id: DataGenerator.Content.tags[0].id},
+        {id: ObjectId.generate(), post_id: DataGenerator.Content.posts[1].id, tag_id: DataGenerator.Content.tags[1].id},
+        {id: ObjectId.generate(), post_id: DataGenerator.Content.posts[2].id, tag_id: DataGenerator.Content.tags[2].id},
+        {id: ObjectId.generate(), post_id: DataGenerator.Content.posts[3].id, tag_id: DataGenerator.Content.tags[3].id}
     ];
 
     apps = [
@@ -435,11 +546,17 @@ DataGenerator.forKnex = (function () {
         createAppField(DataGenerator.Content.app_fields[1])
     ];
 
+    invites = [
+        createInvite({email: 'test1@ghost.org', role_id: DataGenerator.Content.roles[0].id}),
+        createInvite({email: 'test2@ghost.org', role_id: DataGenerator.Content.roles[2].id})
+    ];
+
     return {
         createPost: createPost,
         createGenericPost: createGenericPost,
         createTag: createBasic,
         createUser: createUser,
+        createClient: createClient,
         createGenericUser: createGenericUser,
         createBasic: createBasic,
         createRole: createBasic,
@@ -450,7 +567,9 @@ DataGenerator.forKnex = (function () {
         createAppSetting: createAppSetting,
         createToken: createToken,
         createSubscriber: createBasic,
+        createInvite: createInvite,
 
+        invites: invites,
         posts: posts,
         tags: tags,
         posts_tags: posts_tags,
@@ -463,6 +582,7 @@ DataGenerator.forKnex = (function () {
     };
 }());
 
+// @TODO: this logic only exists because we are now using our models :/
 DataGenerator.forModel = (function () {
     var posts,
         tags,
@@ -483,8 +603,8 @@ DataGenerator.forModel = (function () {
         }, user);
     });
 
-    roles = _.map(DataGenerator.Content.roles, function (role, id) {
-        return _.extend({}, role, {id: id + 1});
+    roles = _.map(DataGenerator.Content.roles, function (role) {
+        return _.extend({}, role, {id: ObjectId.generate()});
     });
 
     return {

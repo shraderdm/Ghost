@@ -1,9 +1,8 @@
-/*globals describe, beforeEach, afterEach, it*/
 var should   = require('should'),
     sinon    = require('sinon'),
     errors   = require('../../../../server/errors'),
 
-// Stuff we are testing
+    // Stuff we are testing
     handleError = require('../../../../server/controllers/frontend/error'),
 
     sandbox = sinon.sandbox.create();
@@ -22,7 +21,7 @@ describe('handleError', function () {
     });
 
     it('should call next with no args for 404 errors', function () {
-        var notFoundError = new errors.NotFoundError('Something wasn\'t found');
+        var notFoundError = new errors.NotFoundError({message: 'Something wasn\'t found'});
         handleError(next)(notFoundError);
 
         next.calledOnce.should.be.true();
@@ -30,7 +29,8 @@ describe('handleError', function () {
     });
 
     it('should call next with error for other errors', function () {
-        var otherError = new errors.MethodNotAllowedError('Something wasn\'t allowed');
+        var otherError = new Error();
+        otherError.message = 'Something wasn\'t allowed';
 
         handleError(next)(otherError);
 

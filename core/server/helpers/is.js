@@ -2,7 +2,7 @@
 // Usage: `{{#is "paged"}}`, `{{#is "index, paged"}}`
 // Checks whether we're in a given context.
 var _               = require('lodash'),
-    errors          = require('../errors'),
+    logging         = require('../logging'),
     i18n            = require('../i18n'),
     is;
 
@@ -12,7 +12,7 @@ is = function (context, options) {
     var currentContext = options.data.root.context;
 
     if (!_.isString(context)) {
-        errors.logWarn(i18n.t('warnings.helpers.is.invalidAttribute'));
+        logging.warn(i18n.t('warnings.helpers.is.invalidAttribute'));
         return;
     }
 
@@ -20,7 +20,7 @@ is = function (context, options) {
         return expr.split(',').map(function (v) {
             return v.trim();
         }).reduce(function (p, c) {
-            return p || _.contains(currentContext, c);
+            return p || _.includes(currentContext, c);
         }, false);
     }
 

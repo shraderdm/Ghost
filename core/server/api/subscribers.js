@@ -80,7 +80,7 @@ subscribers = {
                 return {subscribers: [result.toJSON(options)]};
             }
 
-            return Promise.reject(new errors.NotFoundError(i18n.t('errors.api.subscribers.subscriberNotFound')));
+            return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.api.subscribers.subscriberNotFound')}));
         });
     },
 
@@ -105,12 +105,12 @@ subscribers = {
                         // we don't expose this information
                         return Promise.resolve(subscriber);
                     } else if (subscriber) {
-                        return Promise.reject(new errors.ValidationError(i18n.t('errors.api.subscribers.subscriberAlreadyExists')));
+                        return Promise.reject(new errors.ValidationError({message: i18n.t('errors.api.subscribers.subscriberAlreadyExists')}));
                     }
 
                     return dataProvider.Subscriber.add(options.data.subscribers[0], _.omit(options, ['data'])).catch(function (error) {
                         if (error.code && error.message.toLowerCase().indexOf('unique') !== -1) {
-                            return Promise.reject(new errors.ValidationError(i18n.t('errors.api.subscribers.subscriberAlreadyExists')));
+                            return Promise.reject(new errors.ValidationError({message: i18n.t('errors.api.subscribers.subscriberAlreadyExists')}));
                         }
 
                         return Promise.reject(error);
@@ -167,7 +167,7 @@ subscribers = {
                 return {subscribers: [subscriber]};
             }
 
-            return Promise.reject(new errors.NotFoundError(i18n.t('errors.api.subscribers.subscriberNotFound')));
+            return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.api.subscribers.subscriberNotFound')}));
         });
     },
 
@@ -241,8 +241,8 @@ subscribers = {
         function exportSubscribers() {
             return dataProvider.Subscriber.findPage(options).then(function (data) {
                 return formatCSV(data.subscribers);
-            }).catch(function (error) {
-                return Promise.reject(new errors.InternalServerError(error.message || error));
+            }).catch(function (err) {
+                return Promise.reject(new errors.GhostError({err: err}));
             });
         }
 
@@ -266,20 +266,6 @@ subscribers = {
         var tasks = [];
         options = options || {};
 
-        function validate(options) {
-            options.name = options.originalname;
-            options.type = options.mimetype;
-
-            // Check if a file was provided
-            if (!utils.checkFileExists(options)) {
-                return Promise.reject(new errors.ValidationError(i18n.t('errors.api.db.selectFileToImport')));
-            }
-
-            // TODO: check for valid entries
-
-            return options;
-        }
-
         function importCSV(options) {
             var filePath = options.path,
                 fulfilled = 0,
@@ -288,7 +274,7 @@ subscribers = {
 
             return serverUtils.readCSV({
                 path: filePath,
-                columnsToExtract: ['email']
+                columnsToExtract: [{name: 'email', lookup: /email/i}]
             }).then(function (result) {
                 return Promise.all(result.map(function (entry) {
                     return subscribers.add(
@@ -323,7 +309,6 @@ subscribers = {
         }
 
         tasks = [
-            validate,
             utils.handlePermissions(docName, 'add'),
             importCSV
         ];

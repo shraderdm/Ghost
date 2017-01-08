@@ -1,16 +1,15 @@
-/*globals describe, it, beforeEach, afterEach*/
 var should          = require('should'),
     sinon           = require('sinon'),
     nock            = require('nock'),
+    tmp             = require('tmp'),
+    join            = require('path').join,
+    fs              = require('fs'),
+    configUtils     = require('../utils/configUtils'),
     parsePackageJson = require('../../server/utils/parse-package-json'),
-    validateThemes  = require('../../server/utils/validate-themes'),
     readDirectory   = require('../../server/utils/read-directory'),
     readThemes      = require('../../server/utils/read-themes'),
     gravatar        = require('../../server/utils/gravatar'),
-    tmp             = require('tmp'),
-    utils           = require('../../server/utils'),
-    join            = require('path').join,
-    fs              = require('fs');
+    utils           = require('../../server/utils');
 
 // To stop jshint complaining
 should.equal(true, true);
@@ -368,78 +367,13 @@ describe('Server Utilities', function () {
         });
     });
 
-    describe('validate-themes', function () {
-        it('should return warnings for themes without package.json', function (done) {
-            var themesPath, pkgJson;
-
-            themesPath = tmp.dirSync({unsafeCleanup: true});
-            pkgJson = JSON.stringify({
-                name: 'casper',
-                version: '1.0.0'
-            });
-
-            fs.mkdirSync(join(themesPath.name, 'casper'));
-            fs.mkdirSync(join(themesPath.name, 'invalid-casper'));
-
-            fs.writeFileSync(join(themesPath.name, 'casper', 'package.json'), pkgJson);
-
-            validateThemes(themesPath.name)
-                .then(function () {
-                    done(new Error('validateThemes succeeded, but should\'ve failed'));
-                })
-                .catch(function (result) {
-                    result.errors.length.should.equal(0);
-                    result.warnings.should.eql([{
-                        message: 'Found a theme with no package.json file',
-                        context: 'Theme name: invalid-casper',
-                        help: 'This will be required in future. Please see http://docs.ghost.org/themes/'
-                    }]);
-
-                    done();
-                })
-                .catch(done)
-                .finally(themesPath.removeCallback);
-        });
-
-        it('should return warning for theme with invalid package.json', function (done) {
-            var themesPath, pkgJson;
-
-            themesPath = tmp.dirSync({unsafeCleanup: true});
-            pkgJson = '{"name":casper}';
-
-            fs.mkdirSync(join(themesPath.name, 'casper'));
-            fs.writeFileSync(join(themesPath.name, 'casper', 'package.json'), pkgJson);
-
-            validateThemes(themesPath.name)
-                .then(function () {
-                    done(new Error('validateThemes succeeded, but should\'ve failed'));
-                })
-                .catch(function (result) {
-                    result.errors.length.should.equal(0);
-                    result.warnings.should.eql([{
-                        message: 'Found a malformed package.json',
-                        context: 'Theme name: casper',
-                        help: 'Valid package.json will be required in future. Please see http://docs.ghost.org/themes/'
-                    }]);
-
-                    done();
-                })
-                .catch(done)
-                .finally(themesPath.removeCallback);
-        });
-    });
-
     describe('gravatar-lookup', function () {
-        var currentEnv = process.env.NODE_ENV;
-
         beforeEach(function () {
-            // give environment a value that will call gravatar
-            process.env.NODE_ENV = 'production';
+            configUtils.set('env', 'production');
         });
 
         afterEach(function () {
-            // reset the environment
-            process.env.NODE_ENV = currentEnv;
+            configUtils.restore();
         });
 
         it('can successfully lookup a gravatar url', function (done) {
@@ -476,9 +410,7 @@ describe('Server Utilities', function () {
                 .reply(200);
 
             gravatar.lookup({email: 'exists@example.com'}, 10).then(function (result) {
-                should.exist(result);
-                should.not.exist(result.image);
-
+                should.not.exist(result);
                 done();
             }).catch(done);
         });

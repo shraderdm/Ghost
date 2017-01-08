@@ -1,9 +1,7 @@
-/*global describe, it, before, after */
 var testUtils     = require('../../../utils'),
     supertest     = require('supertest'),
     should        = require('should'),
-    ghost         = require('../../../../../core'),
-
+    ghost         = testUtils.startGhost,
     request;
 
 describe('Notifications API', function () {

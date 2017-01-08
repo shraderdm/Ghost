@@ -1,11 +1,8 @@
-/*global describe, it, before, after */
 var testUtils     = require('../../../utils'),
     should        = require('should'),
     supertest     = require('supertest'),
     _             = require('lodash'),
-
-    ghost         = require('../../../../../core'),
-
+    ghost         = testUtils.startGhost,
     request;
 
 describe('Public API', function () {
@@ -161,6 +158,7 @@ describe('Public API', function () {
     it('denies access with invalid client_secret', function (done) {
         request.get(testUtils.API.getApiQuery('posts/?client_id=ghost-admin&client_secret=invalid_secret'))
             .set('Origin', testUtils.API.getURL())
+            .set('Accept', 'application/json')
             .expect('Content-Type', /json/)
             .expect('Cache-Control', testUtils.cacheRules.private)
             .expect(401)
@@ -181,6 +179,7 @@ describe('Public API', function () {
     it('denies access with invalid client_id', function (done) {
         request.get(testUtils.API.getApiQuery('posts/?client_id=invalid-id&client_secret=not_available'))
             .set('Origin', testUtils.API.getURL())
+            .set('Accept', 'application/json')
             .expect('Content-Type', /json/)
             .expect('Cache-Control', testUtils.cacheRules.private)
             .expect(401)
@@ -201,6 +200,7 @@ describe('Public API', function () {
     it('does not send CORS headers on an invalid origin', function (done) {
         request.get(testUtils.API.getApiQuery('posts/?client_id=ghost-admin&client_secret=not_available'))
             .set('Origin', 'http://invalid-origin')
+            .set('Accept', 'application/json')
             .expect('Content-Type', /json/)
             .expect('Cache-Control', testUtils.cacheRules.private)
             .expect(200)
@@ -219,6 +219,7 @@ describe('Public API', function () {
     it('denies access to settings endpoint', function (done) {
         request.get(testUtils.API.getApiQuery('settings/?client_id=ghost-admin&client_secret=not_available'))
             .set('Origin', testUtils.API.getURL())
+            .set('Accept', 'application/json')
             .expect('Content-Type', /json/)
             .expect('Cache-Control', testUtils.cacheRules.private)
             .expect(403)
@@ -232,6 +233,30 @@ describe('Public API', function () {
                 should.exist(jsonResponse);
                 should.exist(jsonResponse.errors);
                 testUtils.API.checkResponseValue(jsonResponse.errors[0], ['message', 'errorType']);
+                done();
+            });
+    });
+
+    it('throws version mismatch error when request includes a version', function (done) {
+        request.get(testUtils.API.getApiQuery('posts/?client_id=ghost-admin&client_secret=not_available'))
+            .set('Origin', testUtils.API.getURL())
+            .set('Accept', 'application/json')
+            .set('X-Ghost-Version', '0.3')
+            .expect('Content-Type', /json/)
+            .expect('Cache-Control', testUtils.cacheRules.private)
+            .expect(400)
+            .end(function (err, res) {
+                if (err) {
+                    return done(err);
+                }
+
+                var jsonResponse = res.body;
+
+                should.exist(jsonResponse);
+                should.exist(jsonResponse.errors);
+                testUtils.API.checkResponseValue(jsonResponse.errors[0], ['message', 'errorType']);
+                jsonResponse.errors[0].errorType.should.eql('VersionMismatchError');
+
                 done();
             });
     });

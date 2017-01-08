@@ -1,10 +1,7 @@
-/*global describe, it, before, after */
 var testUtils     = require('../../../utils'),
     should        = require('should'),
     supertest     = require('supertest'),
-
-    ghost         = require('../../../../../core'),
-
+    ghost         = testUtils.startGhost,
     request;
 
 describe('Tag API', function () {

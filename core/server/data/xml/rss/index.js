@@ -1,27 +1,28 @@
-var _        = require('lodash'),
-    cheerio  = require('cheerio'),
-    crypto   = require('crypto'),
-    downsize = require('downsize'),
-    RSS      = require('rss'),
-    url      = require('url'),
-    config   = require('../../../config'),
-    errors   = require('../../../errors'),
-    filters  = require('../../../filters'),
+var crypto      = require('crypto'),
+    downsize    = require('downsize'),
+    RSS         = require('rss'),
+    config      = require('../../../config'),
+    utils       = require('../../../utils'),
+    errors      = require('../../../errors'),
+    i18n        = require('../../../i18n'),
+    filters     = require('../../../filters'),
+    processUrls = require('../../../utils/make-absolute-urls'),
 
     // Really ugly temporary hack for location of things
-    fetchData = require('../../../controllers/frontend/fetch-data'),
+    fetchData   = require('../../../controllers/frontend/fetch-data'),
 
     generate,
     generateFeed,
+    generateTags,
     getFeedXml,
     feedCache = {};
 
 function isTag(req) {
-    return req.originalUrl.indexOf('/' + config.routeKeywords.tag + '/') !== -1;
+    return req.originalUrl.indexOf(utils.url.urlJoin('/', config.get('routeKeywords').tag, '/')) !== -1;
 }
 
 function isAuthor(req) {
-    return req.originalUrl.indexOf('/' + config.routeKeywords.author + '/') !== -1;
+    return req.originalUrl.indexOf(utils.url.urlJoin('/', config.get('routeKeywords').author, '/')) !== -1;
 }
 
 function handleError(next) {
@@ -40,8 +41,8 @@ function getData(channelOpts, slugParam) {
         if (result.data && result.data.tag) { titleStart = result.data.tag[0].name + ' - ' || ''; }
         if (result.data && result.data.author) { titleStart = result.data.author[0].name + ' - ' || ''; }
 
-        response.title = titleStart + config.theme.title;
-        response.description = config.theme.description;
+        response.title = titleStart + config.get('theme').title;
+        response.description = config.get('theme').description;
         response.results = {
             posts: result.posts,
             meta: result.meta
@@ -52,59 +53,17 @@ function getData(channelOpts, slugParam) {
 }
 
 function getBaseUrl(req, slugParam) {
-    var baseUrl = config.paths.subdir;
+    var baseUrl = utils.url.getSubdir();
 
     if (isTag(req)) {
-        baseUrl += '/' + config.routeKeywords.tag + '/' + slugParam + '/rss/';
+        baseUrl = utils.url.urlJoin(baseUrl, config.get('routeKeywords').tag, slugParam, 'rss/');
     } else if (isAuthor(req)) {
-        baseUrl += '/' + config.routeKeywords.author + '/' + slugParam + '/rss/';
+        baseUrl = utils.url.urlJoin(baseUrl, config.get('routeKeywords').author, slugParam, 'rss/');
     } else {
-        baseUrl += '/rss/';
+        baseUrl = utils.url.urlJoin(baseUrl, 'rss/');
     }
 
     return baseUrl;
-}
-
-function processUrls(html, siteUrl, itemUrl) {
-    var htmlContent = cheerio.load(html, {decodeEntities: false});
-    // convert relative resource urls to absolute
-    ['href', 'src'].forEach(function forEach(attributeName) {
-        htmlContent('[' + attributeName + ']').each(function each(ix, el) {
-            var baseUrl,
-                attributeValue,
-                parsed;
-
-            el = htmlContent(el);
-
-            attributeValue = el.attr(attributeName);
-
-            // if URL is absolute move on to the next element
-            try {
-                parsed = url.parse(attributeValue);
-
-                if (parsed.protocol) {
-                    return;
-                }
-
-                // Do not convert protocol relative URLs
-                if (attributeValue.lastIndexOf('//', 0) === 0) {
-                    return;
-                }
-            } catch (e) {
-                return;
-            }
-
-            // compose an absolute URL
-
-            // if the relative URL begins with a '/' use the blog URL (including sub-directory)
-            // as the base URL, otherwise use the post's URL.
-            baseUrl = attributeValue[0] === '/' ? siteUrl : itemUrl;
-            attributeValue = config.urlJoin(baseUrl, attributeValue);
-            el.attr(attributeName, attributeValue);
-        });
-    });
-
-    return htmlContent;
 }
 
 getFeedXml = function getFeedXml(path, data) {
@@ -118,6 +77,19 @@ getFeedXml = function getFeedXml(path, data) {
     }
 
     return feedCache[path].xml;
+};
+
+generateTags = function generateTags(data) {
+    if (data.tags) {
+        return data.tags.reduce(function (tags, tag) {
+            if (tag.visibility !== 'internal') {
+                tags.push(tag.name);
+            }
+            return tags;
+        }, []);
+    }
+
+    return [];
 };
 
 generateFeed = function generateFeed(data) {
@@ -135,22 +107,22 @@ generateFeed = function generateFeed(data) {
     });
 
     data.results.posts.forEach(function forEach(post) {
-        var itemUrl = config.urlFor('post', {post: post, secure: data.secure}, true),
+        var itemUrl = utils.url.urlFor('post', {post: post, secure: data.secure}, true),
             htmlContent = processUrls(post.html, data.siteUrl, itemUrl),
             item = {
                 title: post.title,
                 description: post.meta_description || downsize(htmlContent.html(), {words: 50}),
-                guid: post.uuid,
+                guid: post.id,
                 url: itemUrl,
                 date: post.published_at,
-                categories: _.pluck(post.tags, 'name'),
+                categories: generateTags(post),
                 author: post.author ? post.author.name : null,
                 custom_elements: []
             },
             imageUrl;
 
         if (post.image) {
-            imageUrl = config.urlFor('image', {image: post.image, secure: data.secure}, true);
+            imageUrl = utils.url.urlFor('image', {image: post.image, secure: data.secure}, true);
 
             // Add a media content tag
             item.custom_elements.push({
@@ -201,12 +173,12 @@ generate = function generate(req, res, next) {
 
         // If page is greater than number of pages we have, redirect to last page
         if (pageParam > maxPage) {
-            return next(new errors.NotFoundError());
+            return next(new errors.NotFoundError({message: i18n.t('errors.errors.pageNotFound')}));
         }
 
         data.version = res.locals.safeVersion;
-        data.siteUrl = config.urlFor('home', {secure: req.secure}, true);
-        data.feedUrl = config.urlFor({relativeUrl: baseUrl, secure: req.secure}, true);
+        data.siteUrl = utils.url.urlFor('home', {secure: req.secure}, true);
+        data.feedUrl = utils.url.urlFor({relativeUrl: baseUrl, secure: req.secure}, true);
         data.secure = req.secure;
 
         return getFeedXml(req.originalUrl, data).then(function then(feedXml) {

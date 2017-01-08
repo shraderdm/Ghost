@@ -4,7 +4,7 @@
 // Checks if a post has a particular property
 
 var _               = require('lodash'),
-    errors          = require('../errors'),
+    logging         = require('../logging'),
     i18n            = require('../i18n'),
     has;
 
@@ -12,7 +12,7 @@ has = function (options) {
     options = options || {};
     options.hash = options.hash || {};
 
-    var tags = _.pluck(this.tags, 'name'),
+    var tags = _.map(this.tags, 'name'),
         author = this.author ? this.author.name : null,
         tagList = options.hash.tag || false,
         authorList = options.hash.author || false,
@@ -37,11 +37,11 @@ has = function (options) {
             return v.trim().toLocaleLowerCase();
         });
 
-        return _.contains(authorList, author.toLocaleLowerCase());
+        return _.includes(authorList, author.toLocaleLowerCase());
     }
 
     if (!tagList && !authorList) {
-        errors.logWarn(i18n.t('warnings.helpers.has.invalidAttribute'));
+        logging.warn(i18n.t('warnings.helpers.has.invalidAttribute'));
         return;
     }
 

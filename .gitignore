@@ -7,8 +7,9 @@ b-cov
 *.pid
 *.gz
 
+!core/test/utils/fixtures/**/*.csv
+
 pids
-logs
 results
 
 npm-debug.log
@@ -45,6 +46,7 @@ Session.vim
 /core/server/data/export/exported*
 /content/tmp/*
 /content/data/*
+/content/logs/*
 /content/apps/**/*
 /content/themes/**/*
 /content/images/**/*
@@ -58,7 +60,8 @@ CHANGELOG.md
 /core/test/functional/*.png
 /core/test/coverage
 
-/config.js
+# ignore all custom json files for config
+config.*.json
 
 # Built asset files
 /core/built

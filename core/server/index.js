@@ -1,28 +1,39 @@
 // # Bootup
 // This file needs serious love & refactoring
 
-// Module dependencies
-var express     = require('express'),
-    hbs         = require('express-hbs'),
-    compress    = require('compression'),
-    uuid        = require('node-uuid'),
-    Promise     = require('bluebird'),
-    i18n        = require('./i18n'),
-    api         = require('./api'),
-    config      = require('./config'),
-    errors      = require('./errors'),
-    helpers     = require('./helpers'),
-    middleware  = require('./middleware'),
-    migrations  = require('./data/migration'),
-    models      = require('./models'),
-    permissions = require('./permissions'),
-    apps        = require('./apps'),
-    sitemap     = require('./data/xml/sitemap'),
-    xmlrpc      = require('./data/xml/xmlrpc'),
-    slack       = require('./data/slack'),
-    GhostServer = require('./ghost-server'),
-    validateThemes = require('./utils/validate-themes'),
+/**
+ * make sure overrides get's called first!
+ * - keeping the overrides require here works for installing Ghost as npm!
+ *
+ * the call order is the following:
+ * - root index requires core module
+ * - core index requires server
+ * - overrides is the first package to load
+ */
+require('./overrides');
 
+// Module dependencies
+var debug = require('debug')('ghost:boot:init'),
+    uuid = require('uuid'),
+    Promise = require('bluebird'),
+    KnexMigrator = require('knex-migrator'),
+    config = require('./config'),
+    logging = require('./logging'),
+    i18n = require('./i18n'),
+    api = require('./api'),
+    models = require('./models'),
+    permissions = require('./permissions'),
+    apps = require('./apps'),
+    auth = require('./auth'),
+    xmlrpc = require('./data/xml/xmlrpc'),
+    slack = require('./data/slack'),
+    GhostServer = require('./ghost-server'),
+    scheduling = require('./scheduling'),
+    readDirectory = require('./utils/read-directory'),
+    utils = require('./utils'),
+    knexMigrator = new KnexMigrator({
+        knexMigratorFilePath: config.get('paths:appRoot')
+    }),
     dbHash;
 
 function initDbHashAndFirstRun() {
@@ -50,9 +61,10 @@ function initDbHashAndFirstRun() {
 // Sets up the express server instances, runs init on a bunch of stuff, configures views, helpers, routes and more
 // Finally it returns an instance of GhostServer
 function init(options) {
-    // Get reference to an express app instance.
-    var blogApp = express(),
-        adminApp = express();
+    debug('Init Start...');
+    options = options || {};
+
+    var ghostServer, parentApp;
 
     // ### Initialisation
     // The server and its dependencies require a populated config
@@ -61,77 +73,82 @@ function init(options) {
 
     // Initialize Internationalization
     i18n.init();
+    debug('I18n done');
 
-    // Load our config.js file from the local file system.
-    return config.load(options.config).then(function () {
-        return config.checkDeprecated();
+    return readDirectory(config.getContentPath('apps')).then(function loadThemes(result) {
+        config.set('paths:availableApps', result);
+        return api.themes.loadThemes();
     }).then(function () {
-        // Initialise the models
+        debug('Themes & apps done');
+
         models.init();
     }).then(function () {
-        // Initialize migrations
-        return migrations.init();
+        return knexMigrator.isDatabaseOK();
     }).then(function () {
         // Populate any missing default settings
         return models.Settings.populateDefaults();
     }).then(function () {
-        // Initialize the settings cache
-        return api.init();
+        debug('Models & database done');
+
+        return api.settings.updateSettingsCache();
     }).then(function () {
+        debug('Update settings cache done');
         // Initialize the permissions actions and objects
         // NOTE: Must be done before initDbHashAndFirstRun calls
         return permissions.init();
     }).then(function () {
+        debug('Permissions done');
         return Promise.join(
             // Check for or initialise a dbHash.
             initDbHashAndFirstRun(),
             // Initialize apps
             apps.init(),
-            // Initialize sitemaps
-            sitemap.init(),
             // Initialize xmrpc ping
-            xmlrpc.init(),
+            xmlrpc.listen(),
             // Initialize slack ping
-            slack.init()
+            slack.listen()
         );
     }).then(function () {
-        var adminHbs = hbs.create();
+        debug('Apps, XMLRPC, Slack done');
 
-        // ##Configuration
+        // Setup our collection of express apps
+        parentApp = require('./app')();
 
-        // enabled gzip compression by default
-        if (config.server.compress !== false) {
-            blogApp.use(compress());
-        }
+        debug('Express Apps done');
 
-        // ## View engine
-        // set the view engine
-        blogApp.set('view engine', 'hbs');
+        // runs asynchronous
+        auth.init({
+            authType: config.get('auth:type'),
+            ghostAuthUrl: config.get('auth:url'),
+            redirectUri: utils.url.urlJoin(utils.url.getBaseUrl(), 'ghost', '/'),
+            clientUri: utils.url.urlJoin(utils.url.getBaseUrl(), '/'),
+            clientName: api.settings.getSettingSync('title'),
+            clientDescription: api.settings.getSettingSync('description')
+        }).then(function (response) {
+            parentApp.use(response.auth);
+        }).catch(function onAuthError(err) {
+            logging.error(err);
+        });
+    }).then(function () {
+        debug('Auth done');
+        return new GhostServer(parentApp);
+    }).then(function (_ghostServer) {
+        ghostServer = _ghostServer;
 
-        // Create a hbs instance for admin and init view engine
-        adminApp.set('view engine', 'hbs');
-        adminApp.engine('hbs', adminHbs.express3({}));
-
-        // Load helpers
-        helpers.loadCoreHelpers(adminHbs);
-
-        // ## Middleware and Routing
-        middleware(blogApp, adminApp);
-
-        // Log all theme errors and warnings
-        validateThemes(config.paths.themePath)
-            .catch(function (result) {
-                // TODO: change `result` to something better
-                result.errors.forEach(function (err) {
-                    errors.logError(err.message, err.context, err.help);
-                });
-
-                result.warnings.forEach(function (warn) {
-                    errors.logWarn(warn.message, warn.context, warn.help);
-                });
-            });
-
-        return new GhostServer(blogApp);
+        // scheduling can trigger api requests, that's why we initialize the module after the ghost server creation
+        // scheduling module can create x schedulers with different adapters
+        debug('Server done');
+        return scheduling.init({
+            schedulerUrl: config.get('scheduling').schedulerUrl,
+            active: config.get('scheduling').active,
+            apiUrl: utils.url.apiUrl(),
+            internalPath: config.get('paths').internalSchedulingPath,
+            contentPath: config.getContentPath('scheduling')
+        });
+    }).then(function () {
+        debug('Scheduling done');
+        debug('...Init End');
+        return ghostServer;
     });
 }
 

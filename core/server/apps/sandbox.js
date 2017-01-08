@@ -44,7 +44,7 @@ AppSandbox.prototype.loadModule = function loadModuleSandboxed(modulePath) {
     // Set a new proxy require function
     currentModule.require = function requireProxy(module) {
         // check whitelist, plugin config, etc.
-        if (_.contains(self.opts.blacklist, module)) {
+        if (_.includes(self.opts.blacklist, module)) {
             throw new Error(i18n.t('errors.apps.unsafeAppRequire.error', {msg: module}));
         }
 
@@ -91,7 +91,7 @@ AppSandbox.prototype.loadModule = function loadModuleSandboxed(modulePath) {
 };
 
 AppSandbox.defaults = {
-    blacklist: ['knex', 'fs', 'http', 'sqlite3', 'pg', 'mysql', 'ghost']
+    blacklist: ['knex', 'fs', 'http', 'sqlite3', 'mysql', 'ghost']
 };
 
 module.exports = AppSandbox;

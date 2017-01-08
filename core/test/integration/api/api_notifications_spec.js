@@ -1,16 +1,15 @@
-/*globals describe, before, beforeEach, afterEach, it */
 var testUtils        = require('../../utils'),
     should           = require('should'),
     _                = require('lodash'),
-
-    // Stuff we are testing
-    NotificationsAPI = require('../../../server/api/notifications');
+    ObjectId         = require('bson-objectid'),
+    NotificationsAPI = require('../../../server/api/notifications'),
+    SettingsAPI      = require('../../../server/api/settings');
 
 describe('Notifications API', function () {
     // Keep the DB clean
     before(testUtils.teardown);
     afterEach(testUtils.teardown);
-    beforeEach(testUtils.setup('users:roles', 'perms:notification', 'perms:init'));
+    beforeEach(testUtils.setup('settings', 'users:roles', 'perms:setting', 'perms:notification', 'perms:init'));
 
     should.exist(NotificationsAPI);
 
@@ -38,7 +37,7 @@ describe('Notifications API', function () {
     it('can add, adds defaults (owner)', function (done) {
         var msg = {
             type: 'info',
-            message: 'Hello, this is dog'
+            message: 'Hello, this is another dog'
         };
 
         NotificationsAPI.add({notifications: [msg]}, testUtils.context.owner).then(function (result) {
@@ -59,8 +58,9 @@ describe('Notifications API', function () {
     it('can add, adds id and status (internal)', function (done) {
         var msg = {
             type: 'info',
-            message: 'Hello, this is dog',
-            id: 99
+            message: 'Hello, this is dog number 3',
+            // id can't be passed from outside
+            id: ObjectId.generate()
         };
 
         NotificationsAPI.add({notifications: [msg]}, testUtils.context.internal).then(function (result) {
@@ -70,8 +70,7 @@ describe('Notifications API', function () {
             should.exist(result.notifications);
 
             notification = result.notifications[0];
-            notification.id.should.be.a.Number();
-            notification.id.should.not.equal(99);
+            notification.id.should.not.equal(msg.id);
             should.exist(notification.status);
             notification.status.should.equal('alert');
 
@@ -143,6 +142,32 @@ describe('Notifications API', function () {
                 _.extend({}, testUtils.context.owner, {id: notification.id})
             ).then(function (result) {
                 should.not.exist(result);
+
+                done();
+            }).catch(done);
+        });
+    });
+
+    it('can destroy a custom notification and add its uuid to seenNotifications (owner)', function (done) {
+        var customNotification = {
+            status: 'alert',
+            type: 'info',
+            location: 'test.to-be-deleted',
+            custom: true,
+            dismissible: true,
+            message: 'Hello, this is dog number 4'
+        };
+
+        NotificationsAPI.add({notifications: [customNotification]}, testUtils.context.internal).then(function (result) {
+            var notification = result.notifications[0];
+
+            NotificationsAPI.destroy(
+            _.extend({}, testUtils.context.internal, {id: notification.id})
+            ).then(function () {
+                return SettingsAPI.read(_.extend({key: 'seenNotifications'}, testUtils.context.internal));
+            }).then(function (response) {
+                should.exist(response);
+                response.settings[0].value.should.containEql(notification.id);
 
                 done();
             }).catch(done);

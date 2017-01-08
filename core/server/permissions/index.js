@@ -16,7 +16,7 @@ var _                   = require('lodash'),
 function hasActionsMap() {
     // Just need to find one key in the actionsMap
 
-    return _.any(exported.actionsMap, function (val, key) {
+    return _.some(exported.actionsMap, function (val, key) {
         /*jslint unparam:true*/
         return Object.hasOwnProperty.call(exported.actionsMap, key);
     });
@@ -56,14 +56,14 @@ function parseContext(context) {
 }
 
 function applyStatusRules(docName, method, opts) {
-    var errorMsg = i18n.t('errors.permissions.applyStatusRules.error', {docName: docName});
+    var err = new errors.NoPermissionError({message: i18n.t('errors.permissions.applyStatusRules.error', {docName: docName})});
 
     // Enforce status 'active' for users
     if (docName === 'users') {
         if (!opts.status) {
             return 'active';
         } else if (opts.status !== 'active') {
-            throw errorMsg;
+            throw err;
         }
     }
 
@@ -80,7 +80,7 @@ function applyStatusRules(docName, method, opts) {
             return opts.status;
         } else if (opts.status !== 'published') {
             // any other parameter would make this a permissions error
-            throw errorMsg;
+            throw err;
         }
     }
 
@@ -179,16 +179,16 @@ CanThisResult.prototype.buildObjectTypeHandlers = function (objTypes, actType, c
                         return modelId === permObjId;
                     };
 
-                if (loadedPermissions.user && _.any(loadedPermissions.user.roles, {name: 'Owner'})) {
+                if (loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Owner'})) {
                     hasUserPermission = true;
                 } else if (!_.isEmpty(userPermissions)) {
-                    hasUserPermission = _.any(userPermissions, checkPermission);
+                    hasUserPermission = _.some(userPermissions, checkPermission);
                 }
 
                 // Check app permissions if they were passed
                 hasAppPermission = true;
                 if (!_.isNull(appPermissions)) {
-                    hasAppPermission = _.any(appPermissions, checkPermission);
+                    hasAppPermission = _.some(appPermissions, checkPermission);
                 }
 
                 // Offer a chance for the TargetModel to override the results
@@ -202,7 +202,7 @@ CanThisResult.prototype.buildObjectTypeHandlers = function (objTypes, actType, c
                     return;
                 }
 
-                return Promise.reject(new errors.NoPermissionError(i18n.t('errors.permissions.noPermissionToAction')));
+                return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.permissions.noPermissionToAction')}));
             });
         };
 
@@ -273,9 +273,11 @@ canThis = function (context) {
     return result.beginCheck(context);
 };
 
-init = refresh = function () {
+init = refresh = function (options) {
+    options = options || {};
+
     // Load all the permissions
-    return Models.Permission.findAll().then(function (perms) {
+    return Models.Permission.findAll(options).then(function (perms) {
         var seenActions = {};
 
         exported.actionsMap = {};

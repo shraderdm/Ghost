@@ -6,8 +6,10 @@ var _            = require('lodash'),
     config       = require('../config'),
     canThis      = require('../permissions').canThis,
     errors       = require('../errors'),
+    logging      = require('../logging'),
     utils        = require('./utils'),
     i18n         = require('../i18n'),
+    generalUtils = require('../utils'),
 
     docName      = 'settings',
     settings,
@@ -25,7 +27,6 @@ var _            = require('lodash'),
     /**
      * ## Cache
      * Holds cached settings
-     * @private
      * @type {{}}
      */
     settingsCache = {};
@@ -36,34 +37,38 @@ var _            = require('lodash'),
 * @private
 */
 updateConfigCache = function () {
-    var errorMessages = [
-        i18n.t('errors.api.settings.invalidJsonInLabs'),
-        i18n.t('errors.api.settings.labsColumnCouldNotBeParsed'),
-        i18n.t('errors.api.settings.tryUpdatingLabs')
-    ], labsValue = {};
+    var labsValue = {};
 
     if (settingsCache.labs && settingsCache.labs.value) {
         try {
             labsValue = JSON.parse(settingsCache.labs.value);
-        } catch (e) {
-            errors.logError.apply(this, errorMessages);
+        } catch (err) {
+            logging.error(new errors.GhostError({
+                err: err,
+                message: i18n.t('errors.api.settings.invalidJsonInLabs'),
+                context: i18n.t('errors.api.settings.labsColumnCouldNotBeParsed'),
+                help: i18n.t('errors.api.settings.tryUpdatingLabs')
+            }));
         }
     }
 
-    config.set({
-        theme: {
-            title: (settingsCache.title && settingsCache.title.value) || '',
-            description: (settingsCache.description && settingsCache.description.value) || '',
-            logo: (settingsCache.logo && settingsCache.logo.value) || '',
-            cover: (settingsCache.cover && settingsCache.cover.value) || '',
-            navigation: (settingsCache.navigation && JSON.parse(settingsCache.navigation.value)) || [],
-            postsPerPage: (settingsCache.postsPerPage && settingsCache.postsPerPage.value) || 5,
-            permalinks: (settingsCache.permalinks && settingsCache.permalinks.value) || '/:slug/',
-            twitter: (settingsCache.twitter && settingsCache.twitter.value) || '',
-            facebook: (settingsCache.facebook && settingsCache.facebook.value) || '',
-            timezone: (settingsCache.activeTimezone && settingsCache.activeTimezone.value) || 'Europe/Dublin'
-        },
-        labs: labsValue
+    // @TODO: why are we putting the settings cache values into config?we could access the cache directly
+    // @TODO: plus: why do we assign the values to the prefix "theme"?
+    // @TODO: might be related to https://github.com/TryGhost/Ghost/issues/7488
+    config.set('theme:title', (settingsCache.title && settingsCache.title.value) || '');
+    config.set('theme:description', (settingsCache.description && settingsCache.description.value) || '');
+    config.set('theme:logo', (settingsCache.logo && settingsCache.logo.value) || '');
+    config.set('theme:cover', (settingsCache.cover && settingsCache.cover.value) || '');
+    config.set('theme:navigation', (settingsCache.navigation && JSON.parse(settingsCache.navigation.value)) || []);
+    config.set('theme:postsPerPage', (settingsCache.postsPerPage && settingsCache.postsPerPage.value) || config.get('theme').postsPerPage);
+    config.set('theme:permalinks', (settingsCache.permalinks && settingsCache.permalinks.value) || config.get('theme').permalinks);
+    config.set('theme:twitter', (settingsCache.twitter && settingsCache.twitter.value) || '');
+    config.set('theme:facebook', (settingsCache.facebook && settingsCache.facebook.value) || '');
+    config.set('theme:timezone', (settingsCache.activeTimezone && settingsCache.activeTimezone.value) || config.get('theme').timezone);
+    config.set('theme:url', config.get('url') ? generalUtils.url.urlJoin(config.get('url'), '/') : '');
+
+    _.each(labsValue, function (value, key) {
+        config.set('labs:' + key, value);
     });
 };
 
@@ -74,7 +79,8 @@ updateConfigCache = function () {
  * @param {Object} settings
  * @returns {Settings}
  */
-updateSettingsCache = function (settings) {
+updateSettingsCache = function (settings, options) {
+    options = options || {};
     settings = settings || {};
 
     if (!_.isEmpty(settings)) {
@@ -87,12 +93,11 @@ updateSettingsCache = function (settings) {
         return Promise.resolve(settingsCache);
     }
 
-    return dataProvider.Settings.findAll()
+    return dataProvider.Settings.findAll(options)
         .then(function (result) {
-            settingsCache = readSettingsResult(result.models);
-
+            // keep reference and update all keys
+            _.extend(settingsCache, readSettingsResult(result.models));
             updateConfigCache();
-
             return settingsCache;
         });
 };
@@ -108,7 +113,7 @@ updateSettingsCache = function (settings) {
  * @returns {*}
  */
 settingsFilter = function (settings, filter) {
-    return _.object(_.filter(_.pairs(settings), function (setting) {
+    return _.fromPairs(_.filter(_.toPairs(settings), function (setting) {
         if (filter) {
             return _.some(filter.split(','), function (f) {
                 return setting[1].type === f;
@@ -176,8 +181,8 @@ readSettingsResult = function (settingsModels) {
 
             return memo;
         }, {}),
-        themes = config.paths.availableThemes,
-        apps = config.paths.availableApps,
+        themes = config.get('paths').availableThemes,
+        apps = config.get('paths').availableApps,
         res;
 
     if (settings.activeTheme && themes) {
@@ -249,7 +254,7 @@ populateDefaultSetting = function (key) {
         }
 
         // TODO: Different kind of error?
-        return Promise.reject(new errors.NotFoundError(i18n.t('errors.api.settings.problemFindingSetting', {key: key})));
+        return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.api.settings.problemFindingSetting', {key: key})}));
     });
 };
 
@@ -264,12 +269,12 @@ canEditAllSettings = function (settingsInfo, options) {
     var checkSettingPermissions = function (setting) {
             if (setting.type === 'core' && !(options.context && options.context.internal)) {
                 return Promise.reject(
-                    new errors.NoPermissionError(i18n.t('errors.api.settings.accessCoreSettingFromExtReq'))
+                    new errors.NoPermissionError({message: i18n.t('errors.api.settings.accessCoreSettingFromExtReq')})
                 );
             }
 
             return canThis(options.context).edit.setting(setting.key).catch(function () {
-                return Promise.reject(new errors.NoPermissionError(i18n.t('errors.api.settings.noPermissionToEditSettings')));
+                return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.api.settings.noPermissionToEditSettings')}));
             });
         },
         checks = _.map(settingsInfo, function (settingInfo) {
@@ -348,7 +353,7 @@ settings = {
 
                 if (setting.type === 'core' && !(options.context && options.context.internal)) {
                     return Promise.reject(
-                        new errors.NoPermissionError(i18n.t('errors.api.settings.accessCoreSettingFromExtReq'))
+                        new errors.NoPermissionError({message: i18n.t('errors.api.settings.accessCoreSettingFromExtReq')})
                     );
                 }
 
@@ -359,7 +364,7 @@ settings = {
                 return canThis(options.context).read.setting(options.key).then(function () {
                     return settingsResult(result);
                 }, function () {
-                    return Promise.reject(new errors.NoPermissionError(i18n.t('errors.api.settings.noPermissionToReadSettings')));
+                    return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.api.settings.noPermissionToReadSettings')}));
                 });
             };
 
@@ -425,4 +430,21 @@ settings = {
 };
 
 module.exports = settings;
+
+/**
+ * synchronous function to get cached settings value
+ * returns the value of the settings entry
+ */
+module.exports.getSettingSync = function getSettingSync(key) {
+    return settingsCache[key] && settingsCache[key].value;
+};
+
+/**
+ * synchronous function to get all cached settings values
+ * returns everything for now
+ */
+module.exports.getSettingsSync = function getSettingsSync() {
+    return settingsCache;
+};
+
 module.exports.updateSettingsCache = updateSettingsCache;

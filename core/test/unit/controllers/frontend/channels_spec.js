@@ -1,15 +1,12 @@
-/*globals describe, before, beforeEach, afterEach, it*/
 var should   = require('should'),
     sinon    = require('sinon'),
     Promise  = require('bluebird'),
     _        = require('lodash'),
 
-// Stuff we are testing
+    // Stuff we are testing
     channels = require('../../../../server/controllers/frontend/channels'),
     api      = require('../../../../server/api'),
-
     configUtils = require('../../../utils/configUtils'),
-
     sandbox = sinon.sandbox.create();
 
 describe('Channels', function () {
@@ -123,9 +120,9 @@ describe('Channels', function () {
 
         // Return basic paths for the activeTheme
         function setupActiveTheme() {
-            configUtils.set({paths: {availableThemes: {casper: {
+            configUtils.set('paths', {availableThemes: {casper: {
                 'index.hbs': '/content/themes/casper/index.hbs'
-            }}}});
+            }}});
         }
 
         beforeEach(function () {
@@ -258,9 +255,9 @@ describe('Channels', function () {
 
         // Return basic paths for the activeTheme
         function setupActiveTheme() {
-            configUtils.set({paths: {availableThemes: {casper: {
+            configUtils.set('paths', {availableThemes: {casper: {
                 'index.hbs': '/content/themes/casper/index.hbs'
-            }}}});
+            }}});
         }
 
         beforeEach(function () {
@@ -280,10 +277,10 @@ describe('Channels', function () {
         });
 
         it('should render the first page of the tag channel using tag.hbs by default', function (done) {
-            configUtils.set({paths: {availableThemes: {casper: {
+            configUtils.set('paths',{availableThemes: {casper: {
                 'index.hbs': '/content/themes/casper/index.hbs',
                 'tag.hbs': '/content/themes/casper/tag.hbs'
-            }}}});
+            }}});
 
             testChannelRender({url: '/tag/my-tag/'}, function (view) {
                 should.exist(view);
@@ -294,11 +291,11 @@ describe('Channels', function () {
         });
 
         it('should render the first page of the tag channel using tag-:slug.hbs if available', function (done) {
-            configUtils.set({paths: {availableThemes: {casper: {
+            configUtils.set('paths', {availableThemes: {casper: {
                 'index.hbs': '/content/themes/casper/index.hbs',
                 'tag.hbs': '/content/themes/casper/tag.hbs',
                 'tag-my-tag.hbs': '/content/themes/casper/tag-my-tag.hbs'
-            }}}});
+            }}});
 
             testChannelRender({url: '/tag/my-tag/'}, function (view) {
                 should.exist(view);
@@ -318,10 +315,10 @@ describe('Channels', function () {
             });
 
             it('should use tag.hbs to render the tag channel if available', function (done) {
-                configUtils.set({paths: {availableThemes: {casper: {
+                configUtils.set('paths', {availableThemes: {casper: {
                     'index.hbs': '/content/themes/casper/index.hbs',
                     'tag.hbs': '/content/themes/casper/tag.hbs'
-                }}}});
+                }}});
 
                 testChannelRender({url: '/tag/my-tag/page/2/'}, function (view) {
                     should.exist(view);
@@ -331,11 +328,11 @@ describe('Channels', function () {
             });
 
             it('should use tag-:slug.hbs to render the tag channel if available', function (done) {
-                configUtils.set({paths: {availableThemes: {casper: {
+                configUtils.set('paths', {availableThemes: {casper: {
                     'index.hbs': '/content/themes/casper/index.hbs',
                     'tag.hbs': '/content/themes/casper/tag.hbs',
                     'tag-my-tag.hbs': '/content/themes/casper/tag-my-tag.hbs'
-                }}}});
+                }}});
 
                 testChannelRender({url: '/tag/my-tag/page/2/'}, function (view) {
                     should.exist(view);

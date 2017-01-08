@@ -1,4 +1,3 @@
-/*global describe, it, before, after */
 
 // # Channel Route Tests
 // As it stands, these tests depend on the database, and as such are integration tests.
@@ -7,9 +6,8 @@
 var request    = require('supertest'),
     should     = require('should'),
     cheerio    = require('cheerio'),
-
     testUtils  = require('../../utils'),
-    ghost      = require('../../../../core');
+    ghost      = testUtils.startGhost;
 
 describe('Channel Routes', function () {
     function doEnd(done) {
@@ -80,6 +78,8 @@ describe('Channel Routes', function () {
         });
 
         describe('RSS', function () {
+            before(testUtils.teardown);
+
             before(function (done) {
                 testUtils.initData().then(function () {
                     return testUtils.fixtures.overrideOwnerUser();
@@ -134,7 +134,7 @@ describe('Channel Routes', function () {
             // we then insert with max 11 which ensures we have 16 published posts
             before(function (done) {
                 testUtils.initData().then(function () {
-                    return testUtils.fixtures.insertPosts();
+                    return testUtils.fixtures.insertPostsAndTags();
                 }).then(function () {
                     return testUtils.fixtures.insertMorePosts(11);
                 }).then(function () {
@@ -277,10 +277,12 @@ describe('Channel Routes', function () {
         });
 
         describe('Paged', function () {
+            before(testUtils.teardown);
+
             // Add enough posts to trigger pages
             before(function (done) {
                 testUtils.initData().then(function () {
-                    return testUtils.fixtures.insertPosts();
+                    return testUtils.fixtures.insertPostsAndTags();
                 }).then(function () {
                     return testUtils.fixtures.insertMorePosts(22);
                 }).then(function () {
@@ -451,7 +453,7 @@ describe('Channel Routes', function () {
                 }).then(function () {
                     return testUtils.fixtures.overrideOwnerUser('ghost-owner');
                 }).then(function () {
-                    return testUtils.fixtures.insertPosts();
+                    return testUtils.fixtures.insertPostsAndTags();
                 }).then(function () {
                     return testUtils.fixtures.insertMorePosts(9);
                 }).then(function () {

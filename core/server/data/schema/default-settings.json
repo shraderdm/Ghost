@@ -1,7 +1,7 @@
 {
     "core": {
         "databaseVersion": {
-            "defaultValue": "006"
+            "defaultValue": null
         },
         "dbHash": {
             "defaultValue": null
@@ -12,8 +12,8 @@
         "displayUpdateNotification": {
             "defaultValue": null
         },
-        "migrations": {
-            "defaultValue": "{}"
+        "seenNotifications": {
+            "defaultValue": "[]"
         }
     },
     "blog": {
@@ -44,8 +44,9 @@
             }
         },
         "activeTimezone": {
-            "defaultValue": "Europe/Dublin",
+            "defaultValue": "Etc/UTC",
             "validations": {
+                "isTimezone": true,
                 "isNull": false
             }
         },

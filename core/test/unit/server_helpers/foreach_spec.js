@@ -1,4 +1,3 @@
-/*globals describe, before, beforeEach, afterEach, it*/
 var should         = require('should'),
     sinon          = require('sinon'),
     _              = require('lodash'),
@@ -495,6 +494,87 @@ describe('{{#foreach}} helper', function () {
 
             shouldCompileToExpected(templateString, arrayHash, expected);
             shouldCompileToExpected(templateString, objectHash, expected);
+        });
+
+        describe('Internal Tags', function () {
+            var tagArrayHash = {
+                    tags: [
+                        {name: 'first', visibility: 'public'},
+                        {name: 'second', visibility: 'public'},
+                        {name: 'third', visibility: 'internal'},
+                        {name: 'fourth', visibility: 'public'},
+                        {name: 'fifth'}
+                    ]
+                },
+                tagObjectHash = {
+                    tags: {
+                        first: {name: 'first', visibility: 'public'},
+                        second: {name: 'second', visibility: 'public'},
+                        third: {name: 'third', visibility: 'internal'},
+                        fourth: {name: 'fourth', visibility: 'public'},
+                        fifth: {name: 'fifth'}
+                    }
+                };
+
+            it('will not output internal tags', function () {
+                var templateString = '<ul>{{#foreach tags}}<li>{{@index}} {{name}}</li>{{/foreach}}</ul>',
+                    expected = '<ul><li>0 first</li><li>1 second</li><li>2 fourth</li><li>3 fifth</li></ul>';
+
+                shouldCompileToExpected(templateString, tagObjectHash, expected);
+                shouldCompileToExpected(templateString, tagArrayHash, expected);
+            });
+
+            it('should still correctly apply from & limit tags', function () {
+                var templateString = '<ul>{{#foreach tags from="2" limit="2"}}<li>{{@index}} {{name}}</li>{{/foreach}}</ul>',
+                    expected = '<ul><li>1 second</li><li>2 fourth</li></ul>';
+
+                shouldCompileToExpected(templateString, tagObjectHash, expected);
+                shouldCompileToExpected(templateString, tagArrayHash, expected);
+            });
+
+            it('should output all tags with visibility="all"', function () {
+                var templateString = '<ul>{{#foreach tags visibility="all"}}<li>{{@index}} {{name}}</li>{{/foreach}}</ul>',
+                    expected = '<ul><li>0 first</li><li>1 second</li><li>2 third</li><li>3 fourth</li><li>4 fifth</li></ul>';
+
+                shouldCompileToExpected(templateString, tagObjectHash, expected);
+                shouldCompileToExpected(templateString, tagArrayHash, expected);
+            });
+
+            it('should output all tags with visibility property set with visibility="public,internal"', function () {
+                var templateString = '<ul>{{#foreach tags visibility="public,internal"}}<li>{{@index}} {{name}}</li>{{/foreach}}</ul>',
+                    expected = '<ul><li>0 first</li><li>1 second</li><li>2 third</li><li>3 fourth</li></ul>';
+
+                shouldCompileToExpected(templateString, tagObjectHash, expected);
+                shouldCompileToExpected(templateString, tagArrayHash, expected);
+            });
+
+            it('should output all tags with visibility="internal"', function () {
+                var templateString = '<ul>{{#foreach tags visibility="internal"}}<li>{{@index}} {{name}}</li>{{/foreach}}</ul>',
+                    expected = '<ul><li>0 third</li></ul>';
+
+                shouldCompileToExpected(templateString, tagObjectHash, expected);
+                shouldCompileToExpected(templateString, tagArrayHash, expected);
+            });
+
+            it('should output nothing if all tags are internal', function () {
+                var tagArrayHash = {
+                        tags: [
+                            {name: 'first', visibility: 'internal'},
+                            {name: 'second', visibility: 'internal'}
+                        ]
+                    },
+                    tagObjectHash = {
+                        tags: {
+                            first: {name: 'first', visibility: 'internal'},
+                            second: {name: 'second', visibility: 'internal'}
+                        }
+                    },
+                    templateString = '<ul>{{#foreach tags}}<li>{{@index}} {{name}}</li>{{/foreach}}</ul>',
+                    expected = '<ul></ul>';
+
+                shouldCompileToExpected(templateString, tagObjectHash, expected);
+                shouldCompileToExpected(templateString, tagArrayHash, expected);
+            });
         });
     });
 });

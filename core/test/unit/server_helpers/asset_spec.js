@@ -1,4 +1,3 @@
-/*globals describe, before, after, it */
 var should         = require('should'),
     hbs            = require('express-hbs'),
     utils          = require('./utils'),
@@ -53,7 +52,7 @@ describe('{{asset}} helper', function () {
             // with ghost set
             rendered = helpers.asset('js/asset.js', {hash: {ghost: 'true'}});
             should.exist(rendered);
-            String(rendered).should.equal('/ghost/js/asset.js?v=abc');
+            String(rendered).should.equal('/ghost/assets/js/asset.js?v=abc');
         });
 
         it('handles theme assets correctly', function () {
@@ -97,7 +96,7 @@ describe('{{asset}} helper', function () {
             // with ghost set
             rendered = helpers.asset('js/asset.js', {hash: {ghost: 'true'}});
             should.exist(rendered);
-            String(rendered).should.equal('/blog/ghost/js/asset.js?v=abc');
+            String(rendered).should.equal('/blog/ghost/assets/js/asset.js?v=abc');
         });
 
         it('handles theme assets correctly', function () {

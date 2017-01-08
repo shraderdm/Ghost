@@ -1,8 +1,8 @@
-/*global describe, it, before, after */
 var supertest     = require('supertest'),
     should        = require('should'),
+    path          = require('path'),
     testUtils     = require('../../../utils'),
-    ghost         = require('../../../../../core'),
+    ghost         = testUtils.startGhost,
     request;
 
 describe('DB API', function () {
@@ -59,6 +59,36 @@ describe('DB API', function () {
                 var jsonResponse = res.body;
                 should.exist(jsonResponse.db);
                 jsonResponse.db.should.have.length(1);
+                done();
+            });
+    });
+
+    it('import should fail without file', function (done) {
+        request.post(testUtils.API.getApiQuery('db/'))
+            .set('Authorization', 'Bearer ' + accesstoken)
+            .set('Accept', 'application/json')
+            .expect('Content-Type', /json/)
+            .expect(403)
+            .end(function (err) {
+                if (err) {
+                    return done(err);
+                }
+
+                done();
+            });
+    });
+
+    it('import should fail with unsupported file', function (done) {
+        request.post(testUtils.API.getApiQuery('db/'))
+            .set('Authorization', 'Bearer ' + accesstoken)
+            .expect('Content-Type', /json/)
+            .attach('importfile',  path.join(__dirname, '/../../../utils/fixtures/csv/single-column-with-header.csv'))
+            .expect(415)
+            .end(function (err) {
+                if (err) {
+                    return done(err);
+                }
+
                 done();
             });
     });

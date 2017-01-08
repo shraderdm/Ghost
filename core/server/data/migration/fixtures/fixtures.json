@@ -191,6 +191,21 @@
                     "object_type": "theme"
                 },
                 {
+                    "name": "Upload themes",
+                    "action_type": "add",
+                    "object_type": "theme"
+                },
+                {
+                    "name": "Download themes",
+                    "action_type": "read",
+                    "object_type": "theme"
+                },
+                {
+                    "name": "Delete themes",
+                    "action_type": "destroy",
+                    "object_type": "theme"
+                },
+                {
                     "name": "Browse users",
                     "action_type": "browse",
                     "object_type": "user"
@@ -274,6 +289,31 @@
                     "name": "Delete subscribers",
                     "action_type": "destroy",
                     "object_type": "subscriber"
+                },
+                {
+                    "name": "Browse invites",
+                    "action_type": "browse",
+                    "object_type": "invite"
+                },
+                {
+                    "name": "Read invites",
+                    "action_type": "read",
+                    "object_type": "invite"
+                },
+                {
+                    "name": "Add invites",
+                    "action_type": "add",
+                    "object_type": "invite"
+                },
+                {
+                    "name": "Edit invites",
+                    "action_type": "edit",
+                    "object_type": "invite"
+                },
+                {
+                    "name": "Delete invites",
+                    "action_type": "destroy",
+                    "object_type": "invite"
                 }
             ]
         }
@@ -303,7 +343,8 @@
                     "user": "all",
                     "role": "all",
                     "client": "all",
-                    "subscriber": "all"
+                    "subscriber": "all",
+                    "invite": "all"
                 },
                 "Editor": {
                     "post": "all",

@@ -1,4 +1,3 @@
-/*global describe, it, before, after */
 
 // # Frontend Route tests
 // As it stands, these tests depend on the database, and as such are integration tests.
@@ -7,10 +6,11 @@
 
 var request    = require('supertest'),
     should     = require('should'),
-
     testUtils  = require('../../utils'),
-    ghost      = require('../../../../core'),
-    i18n       = require('../../../../core/server/i18n');
+    ghost      = testUtils.startGhost,
+    i18n       = require('../../../../core/server/i18n'),
+    config     = require('../../../../core/server/config');
+
 i18n.init();
 
 describe('Admin Routing', function () {
@@ -40,6 +40,8 @@ describe('Admin Routing', function () {
         };
     }
 
+    before(testUtils.teardown);
+
     before(function (done) {
         ghost().then(function (ghostServer) {
             // Setup the request object with the ghost express app
@@ -57,6 +59,22 @@ describe('Admin Routing', function () {
         testUtils.clearData().then(function () {
             done();
         }).catch(done);
+    });
+
+    describe('Assets', function () {
+        it('should return 404 for unknown assets', function (done) {
+            request.get('/ghost/assets/not-found.js')
+                .expect('Cache-Control', testUtils.cacheRules.private)
+                .expect(404)
+                .end(doEnd(done));
+        });
+
+        it('should retrieve built assets', function (done) {
+            request.get('/ghost/assets/vendor.js')
+                .expect('Cache-Control', testUtils.cacheRules.year)
+                .expect(200)
+                .end(doEnd(done));
+        });
     });
 
     describe('Legacy Redirects', function () {
@@ -112,17 +130,18 @@ describe('Admin Routing', function () {
     // we'll use X-Forwarded-Proto: https to simulate an 'https://' request behind a proxy
     describe('Require HTTPS - no redirect', function () {
         var forkedGhost, request;
-        before(function (done) {
-            var configTestHttps = testUtils.fork.config();
-            configTestHttps.forceAdminSSL = {redirect: false};
-            configTestHttps.urlSSL = 'https://localhost/';
 
-            testUtils.fork.ghost(configTestHttps, 'testhttps')
+        before(function (done) {
+            testUtils.fork.ghost({
+                forceAdminSSL: {redirect: false},
+                urlSSL: 'https://localhost/'
+            }, 'testhttps')
                 .then(function (child) {
                     forkedGhost = child;
                     request = require('supertest');
-                    request = request(configTestHttps.url.replace(/\/$/, ''));
-                }).then(done)
+                    request = request(config.get('url').replace(/\/$/, ''));
+                })
+                .then(done)
                 .catch(done);
         });
 
@@ -151,15 +170,14 @@ describe('Admin Routing', function () {
     describe('Require HTTPS - redirect', function () {
         var forkedGhost, request;
         before(function (done) {
-            var configTestHttps = testUtils.fork.config();
-            configTestHttps.forceAdminSSL = {redirect: true};
-            configTestHttps.urlSSL = 'https://localhost/';
-
-            testUtils.fork.ghost(configTestHttps, 'testhttps')
+            testUtils.fork.ghost({
+                forceAdminSSL: {redirect: true},
+                urlSSL: 'https://localhost/'
+            }, 'testhttps')
                 .then(function (child) {
                     forkedGhost = child;
                     request = require('supertest');
-                    request = request(configTestHttps.url.replace(/\/$/, ''));
+                    request = request(config.get('url').replace(/\/$/, ''));
                 }).then(done)
                 .catch(done);
         });

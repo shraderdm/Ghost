@@ -1,4 +1,3 @@
-/*globals describe, before, beforeEach, afterEach, it */
 var testUtils   = require('../../utils'),
     should      = require('should'),
     Promise     = require('bluebird'),
@@ -28,7 +27,7 @@ describe('Tags API', function () {
         var newTag;
 
         beforeEach(function () {
-            newTag = _.clone(testUtils.DataGenerator.forKnex.createTag(testUtils.DataGenerator.Content.tags[0]));
+            newTag = _.clone(_.omit(testUtils.DataGenerator.forKnex.createTag(testUtils.DataGenerator.Content.tags[0]), 'id'));
             Promise.resolve(newTag);
         });
 
@@ -77,7 +76,7 @@ describe('Tags API', function () {
 
     describe('Edit', function () {
         var newTagName = 'tagNameUpdated',
-        firstTag = 1;
+            firstTag = testUtils.DataGenerator.Content.tags[0].id;
 
         it('can edit a tag (admin)', function (done) {
             TagAPI.edit({tags: [{name: newTagName}]}, _.extend({}, context.admin, {id: firstTag}))
@@ -122,7 +121,8 @@ describe('Tags API', function () {
     });
 
     describe('Destroy', function () {
-        var firstTag = 1;
+        var firstTag = testUtils.DataGenerator.Content.tags[0].id;
+
         it('can destroy Tag', function (done) {
             TagAPI.destroy(_.extend({}, testUtils.context.admin, {id: firstTag}))
                 .then(function (results) {
@@ -273,7 +273,7 @@ describe('Tags API', function () {
                 .then(function (results) {
                     should.exist(results);
 
-                    expectedTags = _(results.tags).pluck('slug').filter(onlyFixtures).sortBy().value();
+                    expectedTags = _(results.tags).map('slug').filter(onlyFixtures).sortBy().value();
 
                     return TagAPI.browse({context: {user: 1}, order: 'slug asc'});
                 })
@@ -282,7 +282,7 @@ describe('Tags API', function () {
 
                     should.exist(results);
 
-                    tags = _(results.tags).pluck('slug').filter(onlyFixtures).value();
+                    tags = _(results.tags).map('slug').filter(onlyFixtures).value();
                     tags.should.eql(expectedTags);
                 })
                 .then(done)
@@ -296,7 +296,7 @@ describe('Tags API', function () {
                 .then(function (results) {
                     should.exist(results);
 
-                    expectedTags = _(results.tags).pluck('slug').filter(onlyFixtures).sortBy().reverse().value();
+                    expectedTags = _(results.tags).map('slug').filter(onlyFixtures).sortBy().reverse().value();
 
                     return TagAPI.browse({context: {user: 1}, order: 'slug desc'});
                 })
@@ -305,7 +305,7 @@ describe('Tags API', function () {
 
                     should.exist(results);
 
-                    tags = _(results.tags).pluck('slug').filter(onlyFixtures).value();
+                    tags = _(results.tags).map('slug').filter(onlyFixtures).value();
                     tags.should.eql(expectedTags);
                 })
                 .then(done)
@@ -314,10 +314,6 @@ describe('Tags API', function () {
     });
 
     describe('Read', function () {
-        function extractFirstTag(tags) {
-            return _.filter(tags, {id: 1})[0];
-        }
-
         it('returns count.posts with include count.posts', function (done) {
             TagAPI.read({context: {user: 1}, include: 'count.posts', slug: 'kitchen-sink'}).then(function (results) {
                 should.exist(results);
@@ -338,7 +334,7 @@ describe('Tags API', function () {
                 should.exist(results.tags);
                 results.tags.length.should.be.above(0);
 
-                var firstTag = extractFirstTag(results.tags);
+                var firstTag = _.find(results.tags, {id: testUtils.DataGenerator.Content.tags[0].id});
 
                 return TagAPI.read({context: {user: 1}, slug: firstTag.slug});
             }).then(function (found) {

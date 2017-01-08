@@ -1,4 +1,3 @@
-/*globals describe, before, beforeEach, afterEach, it*/
 var testUtils       = require('../../utils'),
     should          = require('should'),
 
@@ -27,7 +26,7 @@ describe('App Setting Model', function () {
     });
 
     it('can findOne', function (done) {
-        AppSettingModel.findOne({id: 1}).then(function (foundAppSetting) {
+        AppSettingModel.findOne({id: testUtils.DataGenerator.Content.app_settings[0].id}).then(function (foundAppSetting) {
             should.exist(foundAppSetting);
 
             foundAppSetting.get('created_at').should.be.an.instanceof(Date);
@@ -37,12 +36,12 @@ describe('App Setting Model', function () {
     });
 
     it('can edit', function (done) {
-        AppSettingModel.findOne({id: 1}).then(function (foundAppSetting) {
+        AppSettingModel.findOne({id: testUtils.DataGenerator.Content.app_settings[0].id}).then(function (foundAppSetting) {
             should.exist(foundAppSetting);
 
             return foundAppSetting.set({value: '350'}).save(null, context);
         }).then(function () {
-            return AppSettingModel.findOne({id: 1});
+            return AppSettingModel.findOne({id: testUtils.DataGenerator.Content.app_settings[0].id});
         }).then(function (updatedAppSetting) {
             should.exist(updatedAppSetting);
 

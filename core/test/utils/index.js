@@ -2,11 +2,16 @@ var Promise       = require('bluebird'),
     _             = require('lodash'),
     fs            = require('fs-extra'),
     path          = require('path'),
-    uuid          = require('node-uuid'),
+    Module        = require('module'),
+    debug         = require('debug')('ghost:test'),
+    ObjectId      = require('bson-objectid'),
+    uuid          = require('uuid'),
+    KnexMigrator  = require('knex-migrator'),
+    ghost         = require('../../server'),
+    errors        = require('../../server/errors'),
     db            = require('../../server/data/db'),
-    migration     = require('../../server/data/migration/'),
     fixtureUtils  = require('../../server/data/migration/fixtures/utils'),
-    Models        = require('../../server/models'),
+    models        = require('../../server/models'),
     SettingsAPI   = require('../../server/api/settings'),
     permissions   = require('../../server/permissions'),
     sequence      = require('../../server/utils/sequence'),
@@ -14,26 +19,40 @@ var Promise       = require('bluebird'),
     filterData    = require('./fixtures/filter-param'),
     API           = require('./api'),
     fork          = require('./fork'),
+    mocks         = require('./mocks'),
     config        = require('../../server/config'),
-
+    knexMigrator  = new KnexMigrator(),
     fixtures,
     getFixtureOps,
     toDoList,
+    originalRequireFn,
     postsInserted = 0,
 
+    mockNotExistingModule,
+    unmockNotExistingModule,
     teardown,
     setup,
     doAuth,
+    createUser,
     login,
     togglePermalinks,
+    startGhost,
 
     initFixtures,
     initData,
-    clearData;
+    clearData,
+    clearBruteData;
+
+// Require additional assertions which help us keep our tests small and clear
+require('./assertions');
 
 /** TEST FIXTURES **/
 fixtures = {
-    insertPosts: function insertPosts() {
+    insertPosts: function insertPosts(posts) {
+        return Promise.resolve(db.knex('posts').insert(posts));
+    },
+
+    insertPostsAndTags: function insertPostsAndTags() {
         return Promise.resolve(db.knex('posts').insert(DataGenerator.forKnex.posts)).then(function () {
             return db.knex('tags').insert(DataGenerator.forKnex.tags);
         }).then(function () {
@@ -56,7 +75,7 @@ fixtures = {
         }).then(function () {
             return db.knex('users').select('id');
         }).then(function (results) {
-            authors = _.pluck(results, 'id');
+            authors = _.map(results, 'id');
 
             // Let's insert posts with random authors
             for (i = 0; i < max; i += 1) {
@@ -75,13 +94,12 @@ fixtures = {
             }));
         }).then(function () {
             return Promise.all([
-                // PostgreSQL can return results in any order
                 db.knex('posts').orderBy('id', 'asc').select('id'),
                 db.knex('tags').select('id')
             ]);
         }).then(function (results) {
-            var posts = _.pluck(results[0], 'id'),
-                tags = _.pluck(results[1], 'id'),
+            var posts = _.map(results[0], 'id'),
+                tags = _.map(results[1], 'id'),
                 promises = [],
                 i;
 
@@ -153,14 +171,13 @@ fixtures = {
         max = max || 50;
 
         return Promise.all([
-            // PostgreSQL can return results in any order
             db.knex('posts').orderBy('id', 'asc').select('id'),
             db.knex('tags').select('id', 'name')
         ]).then(function (results) {
-            var posts = _.pluck(results[0], 'id'),
+            var posts = _.map(results[0], 'id'),
                 injectionTagId = _.chain(results[1])
-                    .where({name: 'injection'})
-                    .pluck('id')
+                    .filter({name: 'injection'})
+                    .map('id')
                     .value()[0],
                 promises = [],
                 i;
@@ -180,6 +197,7 @@ fixtures = {
             }));
         });
     },
+
     insertRoles: function insertRoles() {
         return db.knex('roles').insert(DataGenerator.forKnex.roles);
     },
@@ -209,14 +227,14 @@ fixtures = {
 
     overrideOwnerUser: function overrideOwnerUser(slug) {
         var user;
-
         user = DataGenerator.forKnex.createUser(DataGenerator.Content.users[0]);
+
         if (slug) {
             user.slug = slug;
         }
 
         return db.knex('users')
-            .where('id', '=', '1')
+            .where('id', '=', models.User.ownerUser)
             .update(user);
     },
 
@@ -228,22 +246,37 @@ fixtures = {
         });
     },
 
+    createUsersWithoutOwner: function createUsersWithoutOwner() {
+        var usersWithoutOwner = DataGenerator.forKnex.users.slice(1);
+
+        return db.knex('users').insert(usersWithoutOwner)
+            .then(function () {
+                return db.knex('roles_users').insert(DataGenerator.forKnex.roles_users);
+            });
+    },
+
     createExtraUsers: function createExtraUsers() {
         // grab 3 more users
         var extraUsers = DataGenerator.Content.users.slice(2, 5);
 
         extraUsers = _.map(extraUsers, function (user) {
             return DataGenerator.forKnex.createUser(_.extend({}, user, {
+                id: ObjectId.generate(),
                 email: 'a' + user.email,
                 slug: 'a' + user.slug
             }));
         });
 
+        // @TODO: remove when overhauling test env
+        // tests need access to the extra created users (especially to the created id)
+        // replacement for admin2, editor2 etc
+        DataGenerator.Content.extraUsers = extraUsers;
+
         return db.knex('users').insert(extraUsers).then(function () {
             return db.knex('roles_users').insert([
-                {user_id: 5, role_id: 1},
-                {user_id: 6, role_id: 2},
-                {user_id: 7, role_id: 3}
+                {id: ObjectId.generate(), user_id: extraUsers[0].id, role_id: DataGenerator.Content.roles[0].id},
+                {id: ObjectId.generate(), user_id: extraUsers[1].id, role_id: DataGenerator.Content.roles[1].id},
+                {id: ObjectId.generate(), user_id: extraUsers[2].id, role_id: DataGenerator.Content.roles[2].id}
             ]);
         });
     },
@@ -251,36 +284,15 @@ fixtures = {
     // Creates a client, and access and refresh tokens for user 3 (author)
     createTokensForUser: function createTokensForUser() {
         return db.knex('clients').insert(DataGenerator.forKnex.clients).then(function () {
-            return db.knex('accesstokens').insert(DataGenerator.forKnex.createToken({user_id: 3}));
+            return db.knex('accesstokens').insert(DataGenerator.forKnex.createToken({user_id: DataGenerator.Content.users[2].id}));
         }).then(function () {
-            return db.knex('refreshtokens').insert(DataGenerator.forKnex.createToken({user_id: 3}));
+            return db.knex('refreshtokens').insert(DataGenerator.forKnex.createToken({user_id: DataGenerator.Content.users[2].id}));
         });
     },
 
-    createInvitedUsers: function createInvitedUser() {
-        // grab 3 more users
-        var extraUsers = DataGenerator.Content.users.slice(2, 5);
-
-        extraUsers = _.map(extraUsers, function (user) {
-            return DataGenerator.forKnex.createUser(_.extend({}, user, {
-                email: 'inv' + user.email,
-                slug: 'inv' + user.slug,
-                status: 'invited-pending'
-            }));
-        });
-
-        return db.knex('users').insert(extraUsers).then(function () {
-            return db.knex('roles_users').insert([
-                {user_id: 8, role_id: 1},
-                {user_id: 9, role_id: 2},
-                {user_id: 10, role_id: 3}
-            ]);
-        });
-    },
-
-    insertOne: function insertOne(obj, fn) {
+    insertOne: function insertOne(obj, fn, index) {
         return db.knex(obj)
-           .insert(DataGenerator.forKnex[fn](DataGenerator.Content[obj][0]));
+           .insert(DataGenerator.forKnex[fn](DataGenerator.Content[obj][index || 0]));
     },
 
     insertApps: function insertApps() {
@@ -321,10 +333,10 @@ fixtures = {
             actions = [],
             permissionsRoles = [],
             roles = {
-                Administrator: 1,
-                Editor: 2,
-                Author: 3,
-                Owner: 4
+                Administrator: DataGenerator.Content.roles[0].id,
+                Editor: DataGenerator.Content.roles[1].id,
+                Author: DataGenerator.Content.roles[2].id,
+                Owner: DataGenerator.Content.roles[3].id
             };
 
         // CASE: if empty db will throw SQLITE_MISUSE, hard to debug
@@ -333,19 +345,29 @@ fixtures = {
         }
 
         permsToInsert = _.map(permsToInsert, function (perms) {
-            actions.push(perms.action_type);
+            perms.id = ObjectId.generate();
+
+            actions.push({type: perms.action_type, permissionId: perms.id});
             return DataGenerator.forKnex.createBasic(perms);
         });
 
         _.each(permsRolesToInsert, function (perms, role) {
             if (perms[obj]) {
                 if (perms[obj] === 'all') {
-                    _.each(actions, function (action, i) {
-                        permissionsRoles.push({permission_id: (i + 1), role_id: roles[role]});
+                    _.each(actions, function (action) {
+                        permissionsRoles.push({
+                            id: ObjectId.generate(),
+                            permission_id: action.permissionId,
+                            role_id: roles[role]
+                        });
                     });
                 } else {
                     _.each(perms[obj], function (action) {
-                        permissionsRoles.push({permission_id: (_.indexOf(actions, action) + 1), role_id: roles[role]});
+                        permissionsRoles.push({
+                            id: ObjectId.generate(),
+                            permission_id: _.find(actions, {type: action}).permissionId,
+                            role_id: roles[role]
+                        });
                     });
                 }
             }
@@ -366,17 +388,26 @@ fixtures = {
 
     insertAccessToken: function insertAccessToken(override) {
         return db.knex('accesstokens').insert(DataGenerator.forKnex.createToken(override));
+    },
+
+    insertInvites: function insertInvites() {
+        return db.knex('invites').insert(DataGenerator.forKnex.invites);
     }
 };
 
 /** Test Utility Functions **/
 initData = function initData() {
-    return migration.init();
+    return knexMigrator.init();
 };
 
+clearBruteData = function clearBruteData() {
+    return db.knex('brute').truncate();
+};
+
+// we must always try to delete all tables
 clearData = function clearData() {
-    // we must always try to delete all tables
-    return migration.reset();
+    debug('Database reset');
+    return knexMigrator.reset();
 };
 
 toDoList = {
@@ -398,15 +429,15 @@ toDoList = {
     roles: function insertRoles() { return fixtures.insertRoles(); },
     tag: function insertTag() { return fixtures.insertOne('tags', 'createTag'); },
     subscriber: function insertSubscriber() { return fixtures.insertOne('subscribers', 'createSubscriber'); },
-
-    posts: function insertPosts() { return fixtures.insertPosts(); },
+    posts: function insertPostsAndTags() { return fixtures.insertPostsAndTags(); },
     'posts:mu': function insertMultiAuthorPosts() { return fixtures.insertMultiAuthorPosts(); },
     tags: function insertMoreTags() { return fixtures.insertMoreTags(); },
     apps: function insertApps() { return fixtures.insertApps(); },
     settings: function populateSettings() {
-        return Models.Settings.populateDefaults().then(function () { return SettingsAPI.updateSettingsCache(); });
+        return models.Settings.populateDefaults().then(function () { return SettingsAPI.updateSettingsCache(); });
     },
     'users:roles': function createUsersWithRoles() { return fixtures.createUsersWithRoles(); },
+    'users:no-owner': function createUsersWithoutOwner() { return fixtures.createUsersWithoutOwner(); },
     users: function createExtraUsers() { return fixtures.createExtraUsers(); },
     'user:token': function createTokensForUser() { return fixtures.createTokensForUser(); },
     owner: function insertOwnerUser() { return fixtures.insertOwnerUser(); },
@@ -417,7 +448,8 @@ toDoList = {
         return function permissionsForObj() { return fixtures.permissionsFor(obj); };
     },
     clients: function insertClients() { return fixtures.insertClients(); },
-    filter: function createFilterParamFixtures() { return filterData(DataGenerator); }
+    filter: function createFilterParamFixtures() { return filterData(DataGenerator); },
+    invites: function insertInvites() { return fixtures.insertInvites(); }
 };
 
 /**
@@ -431,6 +463,10 @@ toDoList = {
   *  * `perms:obj` - initialise permissions for a particular object type
   *  * `users:roles` - create a full suite of users, one per role
  * @param {Object} toDos
+ *
+ * @TODO:
+ *  - key: migrations-kate
+ *  - call migration-runner
  */
 getFixtureOps = function getFixtureOps(toDos) {
     // default = default fixtures, if it isn't present, init with tables only
@@ -440,8 +476,14 @@ getFixtureOps = function getFixtureOps(toDos) {
     // Database initialisation
     if (toDos.init || toDos.default) {
         fixtureOps.push(function initDB() {
-            return migration.init(tablesOnly);
+            // skip adding all fixtures!
+            if (tablesOnly) {
+                return knexMigrator.init({skip: 2});
+            }
+
+            return knexMigrator.init();
         });
+
         delete toDos.default;
         delete toDos.init;
     }
@@ -487,10 +529,10 @@ setup = function setup() {
         args = arguments;
 
     return function setup(done) {
-        Models.init();
+        models.init();
 
         if (done) {
-            return initFixtures.apply(self, args).then(function () {
+            initFixtures.apply(self, args).then(function () {
                 done();
             }).catch(done);
         } else {
@@ -499,9 +541,9 @@ setup = function setup() {
     };
 };
 
+// ## Functions for Route Tests (!!)
+
 /**
- * ## DoAuth For Route Tests
- *
  * This function manages the work of ensuring we have an overridden owner user, and grabbing an access token
  * @returns {deferred.promise<AccessToken>}
  */
@@ -513,6 +555,7 @@ doAuth = function doAuth() {
 
     // Remove request from this list
     delete options[0];
+
     // No DB setup, but override the owner
     options = _.merge({'owner:post': true}, _.transform(options, function (result, val) {
         if (val) {
@@ -527,19 +570,48 @@ doAuth = function doAuth() {
     });
 };
 
+createUser = function createUser(options) {
+    var user = options.user,
+        role = options.role;
+
+    return db.knex('users').insert(user)
+        .then(function () {
+            return db.knex('roles');
+        })
+        .then(function (roles) {
+            return db.knex('roles_users').insert({
+                id: ObjectId.generate(),
+                role_id: _.find(roles, {name: role.name}).id,
+                user_id: user.id
+            });
+        })
+        .then(function () {
+            return user;
+        });
+};
+
 login = function login(request) {
-    var user = DataGenerator.forModel.users[0];
+    // CASE: by default we use the owner to login
+    if (!request.user) {
+        request.user = DataGenerator.Content.users[0];
+    }
 
     return new Promise(function (resolve, reject) {
         request.post('/ghost/api/v0.1/authentication/token/')
-            .set('Origin', config.url)
+            .set('Origin', config.get('url'))
             .send({
                 grant_type: 'password',
-                username: user.email,
-                password: user.password,
+                username: request.user.email,
+                password: 'Sl1m3rson',
                 client_id: 'ghost-admin',
                 client_secret: 'not_available'
             }).then(function then(res) {
+                if (res.statusCode !== 200) {
+                    return reject(new errors.GhostError({
+                        message: res.body.errors[0].message
+                    }));
+                }
+
                 resolve(res.body.access_token);
             }, reject);
     });
@@ -569,6 +641,10 @@ togglePermalinks = function togglePermalinks(request, toggle) {
                         return reject(err);
                     }
 
+                    if (res.statusCode !== 200) {
+                        return reject(res.body);
+                    }
+
                     resolve(res.body);
                 });
         });
@@ -576,29 +652,75 @@ togglePermalinks = function togglePermalinks(request, toggle) {
 };
 
 teardown = function teardown(done) {
+    debug('Database reset');
+
     if (done) {
-        migration.reset().then(function () {
-            done();
-        }).catch(done);
+        knexMigrator.reset()
+            .then(function () {
+                done();
+            })
+            .catch(done);
     } else {
-        return migration.reset();
+        return knexMigrator.reset();
     }
 };
 
+/**
+ * offer helper functions for mocking
+ * we start with a small function set to mock non existent modules
+ */
+originalRequireFn = Module.prototype.require;
+mockNotExistingModule = function mockNotExistingModule(modulePath, module) {
+    Module.prototype.require = function (path) {
+        if (path.match(modulePath)) {
+            return module;
+        }
+
+        return originalRequireFn.apply(this, arguments);
+    };
+};
+
+unmockNotExistingModule = function unmockNotExistingModule() {
+    Module.prototype.require = originalRequireFn;
+};
+
+/**
+ * 1. sephiroth init db
+ * 2. start ghost
+ */
+startGhost = function startGhost() {
+    return knexMigrator.reset()
+        .then(function initialiseDatabase() {
+            return knexMigrator.init();
+        })
+        .then(function startGhost() {
+            return ghost();
+        });
+};
+
 module.exports = {
+    startGhost: startGhost,
     teardown: teardown,
     setup: setup,
     doAuth: doAuth,
+    createUser: createUser,
     login: login,
     togglePermalinks: togglePermalinks,
+
+    mockNotExistingModule: mockNotExistingModule,
+    unmockNotExistingModule: unmockNotExistingModule,
 
     initFixtures: initFixtures,
     initData: initData,
     clearData: clearData,
+    clearBruteData: clearBruteData,
+
+    mocks: mocks,
 
     fixtures: fixtures,
 
     DataGenerator: DataGenerator,
+    filterData: filterData,
     API: API,
 
     fork: fork,
@@ -607,28 +729,25 @@ module.exports = {
     context: {
         internal:   {context: {internal: true}},
         external:   {context: {external: true}},
-        owner:      {context: {user: 1}},
-        admin:      {context: {user: 2}},
-        editor:     {context: {user: 3}},
-        author:     {context: {user: 4}}
+        owner:      {context: {user: DataGenerator.Content.users[0].id}},
+        admin:      {context: {user: DataGenerator.Content.users[1].id}},
+        editor:     {context: {user: DataGenerator.Content.users[2].id}},
+        author:     {context: {user: DataGenerator.Content.users[3].id}}
     },
     users: {
         ids: {
-            owner: 1,
-            admin: 2,
-            editor: 3,
-            author: 4,
-            admin2: 5,
-            editor2: 6,
-            author2: 7
+            owner: DataGenerator.Content.users[0].id,
+            admin: DataGenerator.Content.users[1].id,
+            editor: DataGenerator.Content.users[2].id,
+            author: DataGenerator.Content.users[3].id
         }
     },
     roles: {
         ids: {
-            owner: 4,
-            admin: 1,
-            editor: 2,
-            author: 3
+            owner: DataGenerator.Content.roles[3].id,
+            admin: DataGenerator.Content.roles[0].id,
+            editor: DataGenerator.Content.roles[1].id,
+            author: DataGenerator.Content.roles[2].id
         }
     },
 

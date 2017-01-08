@@ -1,39 +1,67 @@
 // # Populate
 // Create a brand new database for a new install of ghost
-var Promise  = require('bluebird'),
+var Promise = require('bluebird'),
+    _ = require('lodash'),
     commands = require('../schema').commands,
+    versioning = require('../schema').versioning,
     fixtures = require('./fixtures'),
-    schema   = require('../schema').tables,
-
+    db = require('../../data/db'),
+    logging = require('../../logging'),
+    models = require('../../models'),
+    errors = require('../../errors'),
+    schema = require('../schema').tables,
     schemaTables = Object.keys(schema),
-    populate;
+    populate, logger;
+
+logger = {
+    info: function info(message) {
+        logging.info('Migrations:' + message);
+    },
+    warn: function warn(message) {
+        logging.warn('Skipping Migrations:' + message);
+    }
+};
 
 /**
  * ## Populate
  * Uses the schema to determine table structures, and automatically creates each table in order
- * TODO: use this directly in tests, so migration.init() can forget about tablesOnly as an option
- *
- * @param {{info: logger.info, warn: logger.warn}} logger
- * @param {Boolean} [tablesOnly] - used by tests
- * @returns {Promise<*>}
  */
-populate = function populate(logger, tablesOnly) {
+populate = function populate(options) {
+    options = options || {};
+
+    var tablesOnly = options.tablesOnly,
+        modelOptions = {
+            context: {
+                internal: true
+            }
+        };
+
     logger.info('Creating tables...');
 
-    var tableSequence = Promise.mapSeries(schemaTables, function createTable(table) {
-        logger.info('Creating table: ' + table);
-        return commands.createTable(table);
-    });
+    return db.knex.transaction(function populateDatabaseInTransaction(transaction) {
+        return Promise.mapSeries(schemaTables, function createTable(table) {
+            logger.info('Creating table: ' + table);
+            return commands.createTable(table, transaction);
+        }).then(function () {
+            // @TODO:
+            //  - key: migrations-kate
+            //  - move to seed
+            return models.Settings.populateDefaults(_.merge({}, {transacting: transaction}, modelOptions));
+        }).then(function () {
+            // @TODO:
+            //  - key: migrations-kate
+            //  - move to seed
+            return versioning.setDatabaseVersion(transaction);
+        }).then(function populateFixtures() {
+            if (tablesOnly) {
+                return;
+            }
 
-    if (tablesOnly) {
-        return tableSequence;
-    }
-
-    return tableSequence.then(function () {
-        // Load the fixtures
-        return fixtures.populate(logger);
-    }).then(function () {
-        return fixtures.ensureDefaultSettings(logger);
+            return fixtures.populate(logger, _.merge({}, {transacting: transaction}, modelOptions));
+        });
+    }).catch(function populateDatabaseError(err) {
+        logger.warn('rolling back...');
+        return Promise.reject(new errors.GhostError({err: err, context: 'Unable to populate database!'}));
     });
 };
 

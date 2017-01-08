@@ -1,75 +1,19 @@
 // # Themes API
 // RESTful API for Themes
-var Promise            = require('bluebird'),
-    _                  = require('lodash'),
-    config             = require('../config'),
-    errors             = require('../errors'),
-    settings           = require('./settings'),
-    pipeline           = require('../utils/pipeline'),
-    utils              = require('./utils'),
-    i18n               = require('../i18n'),
-
-    docName = 'themes',
+var Promise = require('bluebird'),
+    _ = require('lodash'),
+    gscan = require('gscan'),
+    fs = require('fs-extra'),
+    config = require('../config'),
+    errors = require('../errors'),
+    events = require('../events'),
+    logging = require('../logging'),
+    storage = require('../storage'),
+    settings = require('./settings'),
+    apiUtils = require('./utils'),
+    utils = require('./../utils'),
+    i18n = require('../i18n'),
     themes;
-
-/**
- * ### Fetch Active Theme
- * @returns {Theme} theme
- */
-
-function fetchActiveTheme() {
-    return settings.read({
-        key: 'activeTheme',
-        context: {
-            internal: true
-        }
-    }).then(function (response) {
-        return response.settings[0].value;
-    });
-}
-
-/**
- * ### Fetch Available Themes
- * @returns {Themes} themes
- */
-
-function fetchAvailableThemes() {
-    var themes = {};
-
-    _.each(config.paths.availableThemes, function (theme, name) {
-        var isTheme = name.indexOf('.') !== 0 && name !== '_messages' && name.toLowerCase() !== 'readme.md';
-
-        if (!isTheme) {
-            return;
-        }
-
-        themes[name] = theme;
-    });
-
-    return themes;
-}
-
-/**
- * ### Activate Theme
- * @param {Theme} theme
- * @returns {Object} response
- */
-
-function activateTheme(theme) {
-    return settings.edit({
-        settings: [{
-            key: 'activeTheme',
-            value: theme.name
-        }],
-        context: {
-            internal: true
-        }
-    }).then(function () {
-        theme.active = true;
-
-        return {themes: [theme]};
-    });
-}
 
 /**
  * ## Themes API Methods
@@ -77,115 +21,149 @@ function activateTheme(theme) {
  * **See:** [API Methods](index.js.html#api%20methods)
  */
 themes = {
-    /**
-     * ### Browse
-     * Get a list of all the available themes
-     * @param {{context}} options
-     * @returns {Promise(Themes)}
-     */
-    browse: function browse(options) {
-        var tasks;
+    loadThemes: function () {
+        return utils.readThemes(config.getContentPath('themes'))
+            .then(function (result) {
+                config.set('paths:availableThemes', result);
+            });
+    },
 
-        /**
-         * ### Model Query
-         * @returns {Object} result
-         */
+    upload: function upload(options) {
+        options = options || {};
 
-        function modelQuery() {
-            var result = {
-                availableThemes: fetchAvailableThemes(),
-                activeTheme: fetchActiveTheme()
-            };
+        // consistent filename uploads
+        options.originalname = options.originalname.toLowerCase();
 
-            return Promise.props(result);
+        var storageAdapter = storage.getStorage('themes'),
+            zip = {
+                path: options.path,
+                name: options.originalname,
+                shortName: storageAdapter.getSanitizedFileName(options.originalname.split('.zip')[0])
+            }, theme;
+
+        // check if zip name is casper.zip
+        if (zip.name === 'casper.zip') {
+            throw new errors.ValidationError({message: i18n.t('errors.api.themes.overrideCasper')});
         }
 
-        /**
-         * ### Build response
-         * @param {Object} result - result from modelQuery()
-         * @returns {Object} response
-         */
+        return apiUtils.handlePermissions('themes', 'add')(options)
+            .then(function () {
+                return gscan.checkZip(zip, {keepExtractedDir: true});
+            })
+            .then(function (_theme) {
+                theme = _theme;
+                theme = gscan.format(theme);
 
-        function buildResponse(result) {
-            var themes = [];
-
-            _.each(result.availableThemes, function (theme, name) {
-                var item = {
-                    active: result.activeTheme === name,
-                    uuid: name
-                };
-
-                // if theme has package.json file,
-                // merge its properties
-                if (theme['package.json']) {
-                    item = _.merge(item, theme['package.json']);
+                if (!theme.results.error.length) {
+                    return;
                 }
 
-                themes.push(item);
-            });
+                throw new errors.ThemeValidationError({
+                    message: i18n.t('errors.api.themes.invalidTheme'),
+                    errorDetails: theme.results.error
+                });
+            })
+            .then(function () {
+                return storageAdapter.exists(utils.url.urlJoin(config.getContentPath('themes'), zip.shortName));
+            })
+            .then(function (themeExists) {
+                // delete existing theme
+                if (themeExists) {
+                    return storageAdapter.delete(zip.shortName, config.getContentPath('themes'));
+                }
+            })
+            .then(function () {
+                events.emit('theme.uploaded', zip.shortName);
+                // store extracted theme
+                return storageAdapter.save({
+                    name: zip.shortName,
+                    path: theme.path
+                }, config.getContentPath('themes'));
+            })
+            .then(function () {
+                // force reload of availableThemes
+                // right now the logic is in the ConfigManager
+                // if we create a theme collection, we don't have to read them from disk
+                return themes.loadThemes();
+            })
+            .then(function () {
+                // the settings endpoint is used to fetch the availableThemes
+                // so we have to force updating the in process cache
+                return settings.updateSettingsCache();
+            })
+            .then(function (settings) {
+                // gscan theme structure !== ghost theme structure
+                var themeObject = _.find(settings.availableThemes.value, {name: zip.shortName}) || {};
+                if (theme.results.warning.length > 0) {
+                    themeObject.warnings = _.cloneDeep(theme.results.warning);
+                }
+                return {themes: [themeObject]};
+            })
+            .finally(function () {
+                // remove zip upload from multer
+                // happens in background
+                Promise.promisify(fs.removeSync)(zip.path)
+                    .catch(function (err) {
+                        logging.error(new errors.GhostError({err: err}));
+                    });
 
-            return {themes: themes};
+                // remove extracted dir from gscan
+                // happens in background
+                if (theme) {
+                    Promise.promisify(fs.removeSync)(theme.path)
+                        .catch(function (err) {
+                            logging.error(new errors.GhostError({err: err}));
+                        });
+                }
+            });
+    },
+
+    download: function download(options) {
+        var themeName = options.name,
+            theme = config.get('paths').availableThemes[themeName],
+            storageAdapter = storage.getStorage('themes');
+
+        if (!theme) {
+            return Promise.reject(new errors.BadRequestError({message: i18n.t('errors.api.themes.invalidRequest')}));
         }
 
-        tasks = [
-            utils.validate(docName),
-            utils.handlePublicPermissions(docName, 'browse'),
-            modelQuery,
-            buildResponse
-        ];
-
-        return pipeline(tasks, options || {});
+        return apiUtils.handlePermissions('themes', 'read')(options)
+            .then(function () {
+                events.emit('theme.downloaded', themeName);
+                return storageAdapter.serve({isTheme: true, name: themeName});
+            });
     },
 
     /**
-     * ### Edit
-     * Change the active theme
-     * @param {Theme} object
-     * @param {{context}} options
-     * @returns {Promise(Theme)}
+     * remove theme zip
+     * remove theme folder
      */
-    edit: function edit(object, options) {
-        var tasks, themeName;
+    destroy: function destroy(options) {
+        var name = options.name,
+            theme,
+            storageAdapter = storage.getStorage('themes');
 
-        // Check whether the request is properly formatted.
-        if (!_.isArray(object.themes)) {
-            return Promise.reject(new errors.BadRequestError(i18n.t('errors.api.themes.invalidRequest')));
-        }
+        return apiUtils.handlePermissions('themes', 'destroy')(options)
+            .then(function () {
+                if (name === 'casper') {
+                    throw new errors.ValidationError({message: i18n.t('errors.api.themes.destroyCasper')});
+                }
 
-        themeName = object.themes[0].uuid;
-
-        /**
-         * ### Model Query
-         * @param {Object} options
-         * @returns {Theme} theme
-         */
-
-        function modelQuery(options) {
-            return themes.browse(options).then(function (response) {
-                var theme = _.find(response.themes, function (theme) {
-                    return theme.uuid === themeName;
-                });
+                theme = config.get('paths').availableThemes[name];
 
                 if (!theme) {
-                    return Promise.reject(new errors.BadRequestError(i18n.t('errors.api.themes.themeDoesNotExist')));
+                    throw new errors.NotFoundError({message: i18n.t('errors.api.themes.themeDoesNotExist')});
                 }
 
-                if (!theme.name) {
-                    theme.name = themeName;
-                }
-
-                return theme;
+                events.emit('theme.deleted', name);
+                return storageAdapter.delete(name, config.getContentPath('themes'));
+            })
+            .then(function () {
+                return themes.loadThemes();
+            })
+            .then(function () {
+                return settings.updateSettingsCache();
             });
-        }
-
-        tasks = [
-            utils.validate(docName),
-            utils.handlePermissions(docName, 'edit'),
-            modelQuery,
-            activateTheme
-        ];
-
-        return pipeline(tasks, options || {});
     }
 };
 

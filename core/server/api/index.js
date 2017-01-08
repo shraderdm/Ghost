@@ -7,19 +7,22 @@
 var _              = require('lodash'),
     Promise        = require('bluebird'),
     config         = require('../config'),
-    // Include Endpoints
+    models         = require('../models'),
+    utils          = require('../utils'),
     configuration  = require('./configuration'),
     db             = require('./db'),
     mail           = require('./mail'),
     notifications  = require('./notifications'),
     posts          = require('./posts'),
+    schedules      = require('./schedules'),
     roles          = require('./roles'),
     settings       = require('./settings'),
     tags           = require('./tags'),
+    invites        = require('./invites'),
     clients        = require('./clients'),
-    themes         = require('./themes'),
     users          = require('./users'),
     slugs          = require('./slugs'),
+    themes         = require('./themes'),
     subscribers    = require('./subscribers'),
     authentication = require('./authentication'),
     uploads        = require('./upload'),
@@ -31,17 +34,11 @@ var _              = require('lodash'),
     cacheInvalidationHeader,
     locationHeader,
     contentDispositionHeaderExport,
-    contentDispositionHeaderSubscribers,
-    init;
+    contentDispositionHeaderSubscribers;
 
-/**
- * ### Init
- * Initialise the API - populate the settings cache
- * @return {Promise(Settings)} Resolves to Settings Collection
- */
-init = function init() {
-    return settings.updateSettingsCache();
-};
+function isActiveThemeOverride(method, endpoint, result) {
+    return method === 'POST' && endpoint === 'themes' && result.themes && result.themes[0] && result.themes[0].active === true;
+}
 
 /**
  * ### Cache Invalidation Header
@@ -60,13 +57,23 @@ cacheInvalidationHeader = function cacheInvalidationHeader(req, result) {
     var parsedUrl = req._parsedUrl.pathname.replace(/^\/|\/$/g, '').split('/'),
         method = req.method,
         endpoint = parsedUrl[0],
+        subdir = parsedUrl[1],
         jsonResult = result.toJSON ? result.toJSON() : result,
         INVALIDATE_ALL = '/*',
         post,
         hasStatusChanged,
         wasPublishedUpdated;
 
-    if (['POST', 'PUT', 'DELETE'].indexOf(method) > -1) {
+    if (isActiveThemeOverride(method, endpoint, result)) {
+        // Special case for if we're overwriting an active theme
+        // @TODO: remove this crazy DIRTY HORRIBLE HACK
+        req.app.set('activeTheme', null);
+        config.set('assetHash', null);
+        return INVALIDATE_ALL;
+    } else if (['POST', 'PUT', 'DELETE'].indexOf(method) > -1) {
+        if (endpoint === 'schedules' && subdir === 'posts') {
+            return INVALIDATE_ALL;
+        }
         if (['settings', 'users', 'db', 'tags'].indexOf(endpoint) > -1) {
             return INVALIDATE_ALL;
         } else if (endpoint === 'posts') {
@@ -86,7 +93,7 @@ cacheInvalidationHeader = function cacheInvalidationHeader(req, result) {
             if (hasStatusChanged || wasPublishedUpdated) {
                 return INVALIDATE_ALL;
             } else {
-                return '/' + config.routeKeywords.preview + '/' + post.uuid + '/';
+                return utils.url.urlFor({relativeUrl: utils.url.urlJoin('/', config.get('routeKeywords').preview, post.uuid, '/')});
             }
         }
     }
@@ -104,23 +111,25 @@ cacheInvalidationHeader = function cacheInvalidationHeader(req, result) {
  * @return {String} Resolves to header string
  */
 locationHeader = function locationHeader(req, result) {
-    var apiRoot = config.urlFor('api'),
+    var apiRoot = utils.url.urlFor('api'),
         location,
-        newObject;
+        newObject,
+        statusQuery;
 
     if (req.method === 'POST') {
         if (result.hasOwnProperty('posts')) {
             newObject = result.posts[0];
-            location = apiRoot + '/posts/' + newObject.id + '/?status=' + newObject.status;
+            statusQuery = '/?status=' + newObject.status;
+            location = utils.url.urlJoin(apiRoot, 'posts', newObject.id, statusQuery);
         } else if (result.hasOwnProperty('notifications')) {
             newObject = result.notifications[0];
-            location = apiRoot + '/notifications/' + newObject.id + '/';
+            location = utils.url.urlJoin(apiRoot, 'notifications', newObject.id, '/');
         } else if (result.hasOwnProperty('users')) {
             newObject = result.users[0];
-            location = apiRoot + '/users/' + newObject.id + '/';
+            location = utils.url.urlJoin(apiRoot, 'users', newObject.id, '/');
         } else if (result.hasOwnProperty('tags')) {
             newObject = result.tags[0];
-            location = apiRoot + '/tags/' + newObject.id + '/';
+            location = utils.url.urlJoin(apiRoot, 'tags', newObject.id, '/');
         }
     }
 
@@ -213,7 +222,10 @@ http = function http(apiMethod) {
         var object = req.body,
             options = _.extend({}, req.file, req.query, req.params, {
                 context: {
-                    user: ((req.user && req.user.id) || (req.user && req.user.id === 0)) ? req.user.id : null
+                    // @TODO: forward the client and user obj in 1.0 (options.context.user.id)
+                    user: ((req.user && req.user.id) || (req.user && models.User.isExternalUser(req.user.id))) ? req.user.id : null,
+                    client: (req.client && req.client.slug) ? req.client.slug : null,
+                    client_id: (req.client && req.client.id) ? req.client.id : null
                 }
             });
 
@@ -235,6 +247,13 @@ http = function http(apiMethod) {
             if (res.get('Content-Type') && res.get('Content-Type').indexOf('text/csv') === 0) {
                 return res.status(200).send(response);
             }
+
+            // CASE: api method response wants to handle the express response
+            // example: serve files (stream)
+            if (_.isFunction(response)) {
+                return response(req, res, next);
+            }
+
             // Send a properly formatting HTTP response containing the data with correct headers
             res.json(response || {});
         }).catch(function onAPIError(error) {
@@ -248,8 +267,6 @@ http = function http(apiMethod) {
  * ## Public API
  */
 module.exports = {
-    // Extras
-    init: init,
     http: http,
     // API Endpoints
     configuration: configuration,
@@ -257,17 +274,19 @@ module.exports = {
     mail: mail,
     notifications: notifications,
     posts: posts,
+    schedules: schedules,
     roles: roles,
     settings: settings,
     tags: tags,
     clients: clients,
-    themes: themes,
     users: users,
     slugs: slugs,
     subscribers: subscribers,
     authentication: authentication,
     uploads: uploads,
-    slack: slack
+    slack: slack,
+    themes: themes,
+    invites: invites
 };
 
 /**
